@@ -12,6 +12,7 @@ fixtures/**/dist/
 fixtures/**/src-tauri/gen/
 .rustup-local/
 .cargo-local/
+*.tmp
 task_plan.md
 findings.md
 progress.md
