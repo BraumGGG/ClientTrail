@@ -1,0 +1,6 @@
+interface:
+  display_name: "ClientTrail Desktop Testing"
+  short_description: "Automate and diagnose desktop client tests"
+  default_prompt: "Use $clienttrail-desktop-testing to inspect this desktop project, choose the safest structured test strategy, and run deterministic tests with evidence."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,83 @@
+# ClientTrail Desktop Testing Skill
+
+ClientTrail Desktop Testing 是一个可被 AI 直接调用的桌面客户端测试 Skill，面向 Tauri 2、Electron、Windows 原生 UI 和 macOS Accessibility UI。
+
+## 解决的问题
+
+它把 AI 探索与确定性回归分开：AI 可以探索、录制、生成测试和诊断失败；真正的回归由 WebdriverIO、Playwright、pytest、cargo test 或 Accessibility 适配器执行，不依赖 OCR 和截图猜测。
+
+## 适用范围
+
+- Tauri 2 桌面项目，优先支持。
+- Electron 桌面项目。
+- Windows UI Automation 和 macOS Accessibility 项目。
+- 可选的 Python/Rust 后端规则测试。
+
+不支持移动端，也不把 MCP 作为回归测试的必经链路。
+
+## 安装
+
+### Codex
+
+将本目录复制或链接到 Codex Skill 目录：
+
+```powershell
+Copy-Item -Recurse skill "$env:USERPROFILE\\.codex\\skills\\clienttrail-desktop-testing"
+```
+
+也可以在 ClientTrail 仓库根目录直接显式调用：
+
+```text
+$clienttrail-desktop-testing
+```
+
+### Claude Code 或其他 Agent
+
+将 `skill/SKILL.md` 所在目录注册为 Agent Skills 目录，并保留 `references/` 和 `agents/` 子目录。
+
+## 使用方式
+
+向 AI 提供被测项目路径和技术栈，例如：
+
+```text
+使用 $clienttrail-desktop-testing 测试 D:\\Projects\\MyTauriApp，这是一个 Tauri 2 项目。先检查环境，再生成 setup 计划；我确认后再安装依赖并运行回归测试。
+```
+
+Skill 会调用 ClientTrail CLI：
+
+```powershell
+pnpm client-test doctor --project <project-root> --json
+pnpm client-test setup --project <project-root> --dry-run --json
+pnpm client-test run --project <project-root> --json
+```
+
+## 依赖和权限
+
+- Node.js 20+、pnpm 11+。
+- Tauri 项目需要 Rust stable、Windows/macOS 桌面构建工具。
+- Electron 项目需要可用的 Electron runtime 和 Playwright。
+- Windows 原生需要 UI Automation helper；macOS 原生需要 Accessibility 权限和 helper。
+- setup 和运行测试可能修改被测项目测试文件、配置和本地构建产物；执行前必须确认。
+- 默认不上传用户项目、原始日志或凭据；evidence 会脱敏常见 Token、Cookie、Authorization、Secret 和 Password。
+
+## 已知限制
+
+- macOS AX helper 目前是协议层，尚未提供完整系统 helper。
+- Windows `winapp` helper 需要用户自行安装。
+- AI 探索得到的测试必须经过生成和验证，不能直接视为回归通过。
+- 真实桌面构建受本机 SDK、Rust、WebView2、权限和网络环境影响。
+
+## 测试
+
+在仓库根目录运行：
+
+```powershell
+pnpm typecheck
+pnpm test
+pnpm --dir fixtures/electron-basic test:e2e
+pnpm --dir fixtures/tauri-basic exec wdio run wdio.conf.ts --logLevel silent
+```
+
+## 许可证和贡献
+
+本 Skill 使用 MIT 许可证。贡献前请阅读仓库根目录的 `CONTRIBUTING.md` 和 `SECURITY.md`。
