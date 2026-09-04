@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { fileURLToPath } from "node:url";
-import { CommandNotImplementedError } from "@client-test/core";
+import { CommandNotImplementedError, classifyError } from "@client-test/core";
 import { createProjectContext } from "@client-test/core";
 import { tauriAdapter } from "@client-test/adapter-tauri";
 import { printDoctor } from "./output.js";
@@ -140,7 +140,8 @@ export function createCli(): Command {
 
 if (fileURLToPath(import.meta.url).toLowerCase() === process.argv[1]?.toLowerCase()) {
   createCli().parseAsync(process.argv).catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 4;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exitCode = classifyError(error) === "environment" ? 2 : classifyError(error) === "assertion" || classifyError(error) === "timeout" ? 3 : 4;
   });
 }

@@ -1,11 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { fileURLToPath } from "node:url";
+import { classifyError } from "@client-test/core";
 import { projectStatusInput, emptyInput, nativeInput, webviewInput, projectStatus, launchApplication, stopApplication, applicationStatus, nativeOperation, webviewSnapshot, webviewFind, webviewAction, webviewWait, closeWebViewSession, startRecording, stopRecording, recordingStatus, unsupported, textResult } from "./tools.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({ name: "client-test", version: "0.1.0" });
-  const safe = (fn: () => Promise<ReturnType<typeof textResult>> | ReturnType<typeof textResult>) => Promise.resolve().then(fn).catch((error) => textResult({ error: { code: "runtime", message: error instanceof Error ? error.message : String(error) } }));
+  const safe = (fn: () => Promise<ReturnType<typeof textResult>> | ReturnType<typeof textResult>) => Promise.resolve().then(fn).catch((error) => textResult({ error: { code: classifyError(error), message: error instanceof Error ? error.message : String(error) } }));
   server.registerTool("project_status", { description: "Inspect the project and available client test adapters", inputSchema: { project: projectStatusInput.shape.project } }, (input) => safe(() => textResult(projectStatus(input))));
   server.registerTool("app_launch", { description: "Launch the configured application for interactive exploration", inputSchema: { project: projectStatusInput.shape.project } }, (input) => safe(async () => textResult(await launchApplication(input))));
   server.registerTool("app_stop", { description: "Stop the application used for interactive exploration", inputSchema: {} }, () => safe(() => textResult(stopApplication())));

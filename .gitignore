@@ -6,5 +6,10 @@ coverage/
 fixtures/**/node_modules/
 fixtures/**/package-lock.json
 fixtures/**/test-results/
+fixtures/**/.wdio/
+fixtures/**/target/
+task_plan.md
+findings.md
+progress.md
 .DS_Store
 *.log

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parse, stringify } from "@iarna/toml";
@@ -37,6 +38,7 @@ const SMOKE_TEST = `describe("Tauri smoke", () => {
 export async function applyTauriSetupPlan(context: ProjectContext, plan: SetupPlan): Promise<{ changedFiles: string[] }> {
   if (plan.productionRisk === "blocked") throw new Error("Cannot set up Tauri testing: Tauri 2 was not detected");
   const cargoPath = join(context.projectRoot, "src-tauri", "Cargo.toml");
+  const libPath = join(context.projectRoot, "src-tauri", "src", "lib.rs");
   const cargoText = await readFile(cargoPath, "utf8");
   const cargo = parse(cargoText) as Record<string, any>;
   const binaryName = String(cargo.package?.name ?? "app").replace(/-/g, "_");
@@ -65,6 +67,20 @@ export async function applyTauriSetupPlan(context: ProjectContext, plan: SetupPl
     if (next !== cargoText) {
       await writeFile(cargoPath, next, "utf8");
       changedFiles.push(cargoPath);
+    }
+  }
+  if (plan.filesToModify.includes(libPath) && existsSync(libPath)) {
+    const libText = await readFile(libPath, "utf8");
+    if (!libText.includes("tauri_plugin_wdio::init()") || !libText.includes("tauri_plugin_wdio_webdriver::init()")) {
+      const marker = "    builder\n        .run(";
+      if (!libText.includes(marker)) throw new Error("Could not find Tauri builder run chain in src-tauri/src/lib.rs");
+      const pluginLines = [
+        !libText.includes("tauri_plugin_wdio::init()") ? "        .plugin(tauri_plugin_wdio::init())" : "",
+        !libText.includes("tauri_plugin_wdio_webdriver::init()") ? "        .plugin(tauri_plugin_wdio_webdriver::init())" : "",
+      ].filter(Boolean).join("\n");
+      const injected = `    #[cfg(feature = "client-test")]\n    let builder = builder\n${pluginLines};\n\n`;
+      await writeFile(libPath, libText.replace(marker, `${injected}${marker}`), "utf8");
+      changedFiles.push(libPath);
     }
   }
   return { changedFiles };
