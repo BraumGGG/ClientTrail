@@ -9,6 +9,7 @@ fixtures/**/test-results/
 fixtures/**/.wdio/
 fixtures/**/target/
 fixtures/**/dist/
+fixtures/**/src-tauri/gen/
 .rustup-local/
 .cargo-local/
 task_plan.md
