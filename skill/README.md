@@ -49,7 +49,18 @@ Skill 会调用 ClientTrail CLI：
 pnpm client-test doctor --project <project-root> --json
 pnpm client-test setup --project <project-root> --dry-run --json
 pnpm client-test run --project <project-root> --json
+pnpm client-test evidence --project <project-root> --json
 ```
+
+测试完成后可以让 AI 读取临时日志：
+
+```powershell
+pnpm client-test evidence --project <project-root> --json
+pnpm client-test evidence --project <project-root> --run <run-id> --file result.json --json
+pnpm client-test evidence --project <project-root> --run <run-id> --file stderr.log --tail 200
+```
+
+evidence 命令只读 `.client-test/artifacts`，不会上传或修改用户项目。
 
 ## 依赖和权限
 

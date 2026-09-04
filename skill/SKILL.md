@@ -121,6 +121,16 @@ environment -> build -> launch -> locator -> timeout -> assertion
 
 需要失败分类和证据映射时读取 [references/failure-diagnosis.md](references/failure-diagnosis.md)。
 
+读取临时日志时使用只读 evidence 命令，不直接扫描项目外路径：
+
+```text
+client-test evidence --project <project-root> --json
+client-test evidence --project <project-root> --run <run-id> --file result.json --json
+client-test evidence --project <project-root> --run <run-id> --file stderr.log --tail 200
+```
+
+如果用户要求复盘，先列出最近 run，再读取 `result.json`、`manifest.json` 和与失败分类对应的日志；不要把运行产物复制回 Skill 或仓库。
+
 ## 输出要求
 
 完成一次任务后按以下顺序返回：

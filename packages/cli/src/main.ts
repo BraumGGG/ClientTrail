@@ -11,7 +11,7 @@ import { runCargoTest, runPytest } from "@client-test/adapter-backend";
 import { aggregateResults } from "@client-test/core";
 import { detectElectron, electronRuntimeAvailable, runElectronSuite } from "@client-test/adapter-electron";
 import { detectNative, runNativeSuite } from "@client-test/adapter-native";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { isPathInside } from "@client-test/core";
@@ -31,6 +31,7 @@ export function createCli(): Command {
     if (name === "run") command.option("--suite <name>", "WDIO suite name").option("--all", "run all detected suites").option("--json", "emit machine-readable JSON").option("--timeout <ms>", "test timeout in milliseconds", "120000");
     if (name === "generate") command.option("--actions <path>", "recorded actions JSON file").option("--output <path>", "generated test file").option("--force", "overwrite an existing output file").option("--validate", "run TypeScript validation after generation").option("--json", "emit machine-readable JSON");
     if (name === "diagnose") command.option("--result <path>", "result.json path").option("--artifacts <path>", "artifact directory").option("--json", "emit machine-readable JSON");
+    if (name === "evidence") command.option("--run <id>", "evidence run id").option("--file <name>", "file inside the run directory").option("--tail <lines>", "return only the last N lines").option("--json", "emit machine-readable JSON");
     command.action(async () => {
       if (name === "doctor") {
         const options = command.opts<{ project: string; json?: boolean }>();
@@ -136,6 +137,42 @@ export function createCli(): Command {
         if (!isPathInside(context.projectRoot, resultPath)) throw new Error("result path must remain inside the project root");
         const diagnosis = diagnoseResult(JSON.parse(readFileSync(resultPath, "utf8")), options.artifacts ? join(context.projectRoot, options.artifacts) : dirname(resultPath));
         if (options.json) console.log(JSON.stringify(diagnosis)); else console.log(`${diagnosis.kind}: ${diagnosis.remediation}\nEvidence: ${diagnosis.evidence.join(", ") || "none"}`);
+        return;
+      }
+      if (name === "evidence") {
+        const options = command.opts<{ project: string; run?: string; file?: string; tail?: string; json?: boolean }>();
+        const context = await createProjectContext(options.project);
+        const artifactRoot = join(context.projectRoot, context.config.artifacts.directory);
+        if (!isPathInside(context.projectRoot, artifactRoot)) throw new Error("artifact directory must remain inside the project root");
+        const entries = await readdir(artifactRoot, { withFileTypes: true }).catch(() => []);
+        const runs = [];
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const directory = join(artifactRoot, entry.name);
+          const info = await stat(directory);
+          runs.push({ runId: entry.name, directory, modifiedAt: info.mtime.toISOString() });
+        }
+        runs.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+        const selected = options.run ? runs.find((run) => run.runId === options.run) : runs[0];
+        if (!selected) {
+          const result = { artifactDirectory: artifactRoot, runs: [] };
+          if (options.json) console.log(JSON.stringify(result)); else console.log(`No evidence runs found at ${artifactRoot}`);
+          return;
+        }
+        if (!options.file) {
+          const files = (await readdir(selected.directory, { withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
+          const result = { runId: selected.runId, artifactDirectory: selected.directory, files };
+          if (options.json) console.log(JSON.stringify(result)); else console.log(`${selected.runId}\n${files.join("\n")}`);
+          return;
+        }
+        const filePath = join(selected.directory, options.file);
+        if (!isPathInside(selected.directory, filePath)) throw new Error("evidence file must remain inside the selected run directory");
+        const raw = await readFile(filePath, "utf8");
+        const lineCount = options.tail ? Number(options.tail) : undefined;
+        if (lineCount !== undefined && (!Number.isInteger(lineCount) || lineCount <= 0)) throw new Error("--tail must be a positive integer");
+        const content = lineCount ? raw.split(/\r?\n/).slice(-lineCount).join("\n") : raw;
+        const result = { runId: selected.runId, file: options.file, content };
+        if (options.json) console.log(JSON.stringify(result)); else process.stdout.write(content.endsWith("\n") ? content : `${content}\n`);
         return;
       }
       if (name === "mcp") {
