@@ -8,6 +8,9 @@ fixtures/**/package-lock.json
 fixtures/**/test-results/
 fixtures/**/.wdio/
 fixtures/**/target/
+fixtures/**/dist/
+.rustup-local/
+.cargo-local/
 task_plan.md
 findings.md
 progress.md
