@@ -55,6 +55,7 @@ pnpm exec tsx packages/cli/src/main.ts mcp
 ```powershell
 pnpm exec tsc -b --pretty false
 pnpm test
+pnpm test:contract
 ```
 
 The Tauri fixture is under `fixtures/tauri-basic`. Platform E2E requires a working Rust registry and desktop automation permissions.

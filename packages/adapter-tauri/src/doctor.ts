@@ -22,7 +22,9 @@ export async function runTauriDoctor(context: ProjectContext): Promise<DoctorRep
   checks.push({ id: "node", status: nodeMajor >= 20 ? "pass" : "fail", message: `Node.js ${process.versions.node}` });
   checks.push({ id: "package-manager", status: context.packageManager ? "pass" : "warn", message: context.packageManager ? `Detected ${context.packageManager}` : "No lockfile detected" });
   const rust = await commandVersion("rustc", ["--version"]);
-  checks.push({ id: "rust", status: rust ? "pass" : "fail", message: rust ?? "rustc not found" });
+  const rustVersion = rust?.match(/rustc (\d+)\.(\d+)\.(\d+)/);
+  const rustSupported = rustVersion ? Number(rustVersion[1]) > 1 || (Number(rustVersion[1]) === 1 && Number(rustVersion[2]) >= 88) : false;
+  checks.push({ id: "rust", status: rust ? (rustSupported ? "pass" : "warn") : "fail", message: rust ? `${rust}${rustSupported ? "" : " (Tauri 2 dependencies may require rustc >= 1.88)"}` : "rustc not found" });
   const cargo = await commandVersion("cargo", ["--version"]);
   checks.push({ id: "cargo", status: cargo ? "pass" : "fail", message: cargo ?? "cargo not found" });
   const tauriCli = await commandVersion("cargo", ["tauri", "--version"]);

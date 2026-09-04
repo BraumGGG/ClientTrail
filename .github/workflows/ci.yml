@@ -75,7 +75,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm --dir fixtures/electron-basic install --ignore-workspace --registry=https://registry.npmjs.org
+      - run: pnpm --dir fixtures/electron-basic install --ignore-workspace --frozen-lockfile --registry=https://registry.npmjs.org
+      - run: pnpm --dir fixtures/electron-basic rebuild electron
       - run: pnpm --dir fixtures/electron-basic test:e2e
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
