@@ -43,7 +43,7 @@ $clienttrail-desktop-testing
 使用 $clienttrail-desktop-testing 测试我当前打开的 Tauri 2 项目，验证登录、创建记录和退出登录流程。自动完成环境检查和测试配置；修改项目之前先把计划告诉我。
 ```
 
-Agent 会自动完成：识别项目根目录 → 检查环境 → 生成 setup 计划 → 请求一次确认 → 安装依赖和生成配置 → 运行测试 → 读取日志并给出优化建议。
+Agent 会自动完成：识别项目根目录或实际子项目 → 定位 ClientTrail checkout → 检查环境 → 生成 setup 计划 → 请求一次确认 → 安装依赖和生成配置 → 运行测试 → 读取日志并给出优化建议。ClientTrail 不要求安装成全局命令，Agent 应从 checkout 目录通过 `pnpm client-test` 调用。
 
 向 AI 提供被测项目路径和技术栈，例如：
 

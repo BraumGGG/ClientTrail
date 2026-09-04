@@ -39,8 +39,9 @@ intake -> doctor -> strategy -> setup-plan -> confirmation -> setup
 ### Agent 自动编排
 
 1. 从用户消息、当前工作目录和已打开文件中解析被测项目根目录；如果只有一个合理候选，直接使用；有多个候选时要求用户选择。
-2. 自动定位 ClientTrail CLI：优先使用当前仓库的 `pnpm client-test`，否则查找包含 `packages/cli/src/main.ts` 的 ClientTrail checkout；找不到时报告安装位置，不要求用户手写内部路径。
-3. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
+2. 自动定位 ClientTrail CLI：优先使用当前仓库的 `pnpm client-test`；否则查找包含 `packages/cli/src/main.ts` 的 ClientTrail checkout，并执行 `pnpm --dir <clienttrail-root> client-test`。禁止假设系统存在全局 `client-test` 可执行文件；找不到 checkout 时报告安装位置，不伪造结果。
+3. 识别单仓库和多目录项目：先找到包含 `package.json`、`Cargo.toml`、`tauri.conf.json` 或 `pyproject.toml` 的实际子项目根目录。若 worktree 根是 Python/工作流仓库而 `desktop/` 是 Tauri 子项目，Tauri doctor/run 必须使用 `desktop/`，后端测试可继续使用 worktree 根。
+4. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
 4. 若项目尚未接入测试，自动执行 `setup --dry-run --json`，用自然语言汇总将安装的依赖、创建/修改的文件和风险，并只请求一次确认。
 5. 用户确认后自动执行 `setup --yes`；若命令失败，停止后续测试并报告具体依赖或权限错误。
 6. 自动执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
