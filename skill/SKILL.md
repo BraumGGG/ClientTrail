@@ -16,6 +16,8 @@ description: 为 Tauri 2、Electron、Windows 原生和 macOS 原生桌面客户
 
 如果项目路径、技术栈或权限不明确，先报告缺失信息，不要猜测或修改文件。
 
+用户不需要手动拼接 CLI 命令。只要提供 Skill 名称、被测项目位置（当前工作目录、自然语言路径或已打开的项目）和测试要求，Agent 就应该自动完成路径解析、CLI 定位、环境检查、setup 计划、依赖安装、测试配置生成、测试执行和 evidence 读取。
+
 ## 不适用场景
 
 - 移动端应用测试。
@@ -33,6 +35,18 @@ intake -> doctor -> strategy -> setup-plan -> confirmation -> setup
 ```
 
 每一步都必须保留机器可读结果；setup 变更前必须先展示 dry-run 计划并获得用户确认。
+
+### Agent 自动编排
+
+1. 从用户消息、当前工作目录和已打开文件中解析被测项目根目录；如果只有一个合理候选，直接使用；有多个候选时要求用户选择。
+2. 自动定位 ClientTrail CLI：优先使用当前仓库的 `pnpm client-test`，否则查找包含 `packages/cli/src/main.ts` 的 ClientTrail checkout；找不到时报告安装位置，不要求用户手写内部路径。
+3. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
+4. 若项目尚未接入测试，自动执行 `setup --dry-run --json`，用自然语言汇总将安装的依赖、创建/修改的文件和风险，并只请求一次确认。
+5. 用户确认后自动执行 `setup --yes`；若命令失败，停止后续测试并报告具体依赖或权限错误。
+6. 自动执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
+7. 自动读取最近一次 evidence，给出通过/失败、最小复现命令、证据文件和可优化项。
+
+用户只要求“测试一下”时，默认执行 doctor → setup 计划 → 请求确认 → setup → run → evidence；不要把内部命令列表当作用户前置工作。
 
 ## 1. 项目接入
 
@@ -61,13 +75,13 @@ client-test doctor --project <project-root> --json
 
 ## 3. 安装前确认
 
-先调用：
+先自动调用：
 
 ```text
 client-test setup --project <project-root> --dry-run --json
 ```
 
-向用户展示依赖、待创建文件、待修改文件、命令和 `productionRisk`。没有用户明确确认时不要修改项目。不要覆盖已有测试配置；冲突必须停止并报告具体字段。
+向用户展示依赖、待创建文件、待修改文件、命令和 `productionRisk`。没有用户明确确认时不要修改项目。不要覆盖已有测试配置；冲突必须停止并报告具体字段。用户确认后由 Agent 自动执行 setup，不要求用户复制命令。
 
 ## 4. 探索模式
 
