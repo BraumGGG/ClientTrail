@@ -73,7 +73,17 @@ export function createCli(): Command {
           if (options.dryRun || !options.yes) return;
         }
         const result = await tauriAdapter.applySetup(context, plan);
-        console.log(JSON.stringify({ ...result, plan }));
+        const commandResults = [];
+        for (const command of plan.commands) {
+          const executable = process.platform === "win32" && ["pnpm", "npm", "yarn", "bun"].includes(command.executable) ? `${command.executable}.cmd` : command.executable;
+          const commandResult = await runProcess({ ...command, executable }, { timeoutMs: 300_000, redact: context.config.artifacts.redact });
+          commandResults.push({ command: { ...command, executable }, exitCode: commandResult.exitCode, timedOut: commandResult.timedOut, stdout: commandResult.stdout, stderr: commandResult.stderr });
+          if (commandResult.timedOut || commandResult.exitCode !== 0) {
+            process.exitCode = 2;
+            break;
+          }
+        }
+        console.log(JSON.stringify({ ...result, plan, commandResults }));
         return;
       }
       if (name === "run") {

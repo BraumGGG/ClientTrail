@@ -32,7 +32,9 @@ export async function createTauriSetupPlan(context: ProjectContext): Promise<Set
     dependencies: dependencies.filter((dependency) => !existsSync(join(context.projectRoot, "node_modules", dependency))),
     filesToCreate: [wdioConfig, smokeTest].filter((file) => !existsSync(file)),
     filesToModify: [packageJson, cargoToml, tauriMain, tauriLib, capabilities, frontendEntry].filter((file) => existsSync(file)),
-    commands: [{ executable, args: installArgs, cwd: context.projectRoot }],
+    commands: dependencies.filter((dependency) => !existsSync(join(context.projectRoot, "node_modules", dependency))).length > 0
+      ? [{ executable, args: installArgs, cwd: context.projectRoot }]
+      : [],
     productionRisk: "warning",
   };
 }
