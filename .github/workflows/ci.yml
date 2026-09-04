@@ -1,0 +1,87 @@
+name: client-test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec tsc -b --pretty false
+      - run: pnpm test
+
+  tauri-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --dir fixtures/tauri-basic install --ignore-workspace --frozen-lockfile --ignore-scripts
+      - run: pnpm --dir fixtures/tauri-basic exec tauri build --debug --no-bundle --features client-test
+        env:
+          CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+      - run: pnpm --dir fixtures/tauri-basic exec wdio run wdio.conf.ts
+        env:
+          CLIENT_TEST_ARTIFACTS: ${{ github.workspace }}/.client-test/artifacts
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-e2e-${{ matrix.os }}
+          path: |
+            .client-test/artifacts
+            fixtures/tauri-basic/src-tauri/target/debug
+          retention-days: 7
+
+  electron-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm --dir fixtures/electron-basic install --ignore-workspace --registry=https://registry.npmjs.org
+      - run: pnpm --dir fixtures/electron-basic test:e2e
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-e2e-${{ matrix.os }}
+          path: fixtures/electron-basic/test-results
+          retention-days: 7

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/cli" },
+    { "path": "./packages/adapter-backend" }
+    ,{ "path": "./packages/adapter-electron" },
+    { "path": "./packages/adapter-native" }
+    ,{ "path": "./packages/adapter-webview" }
+  ]
+}

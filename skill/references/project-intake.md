@@ -1,0 +1,3 @@
+# Project Intake
+
+收集项目根目录、应用类型、Tauri/Electron 版本、前端框架、后端语言、包管理器、是否允许修改源码、目标平台和 CI 环境。优先读取 manifest 验证用户声明。

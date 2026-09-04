@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist", "composite": true },
+  "references": [{ "path": "../core" }, { "path": "../adapter-tauri" }, { "path": "../adapter-native" }, { "path": "../adapter-webview" }],
+  "include": ["src/**/*.ts"]
+}

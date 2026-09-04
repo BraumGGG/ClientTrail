@@ -1,0 +1,11 @@
+{
+  "identifier": "default",
+  "description": "Client-test fixture permissions",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "wdio:default",
+    "wdio-webdriver:default"
+  ]
+}

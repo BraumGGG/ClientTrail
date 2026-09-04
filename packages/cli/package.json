@@ -1,0 +1,15 @@
+{
+  "name": "@client-test/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@client-test/core": "workspace:*",
+    "@client-test/adapter-tauri": "workspace:*",
+    "@client-test/mcp": "workspace:*",
+    "@client-test/adapter-backend": "workspace:*",
+    "@client-test/adapter-electron": "workspace:*",
+    "@client-test/adapter-native": "workspace:*",
+    "commander": "^12.1.0"
+  }
+}

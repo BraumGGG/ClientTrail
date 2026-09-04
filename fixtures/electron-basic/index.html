@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Electron Client Test Fixture</title></head>
+  <body>
+    <label for="name">Name</label>
+    <input id="name" aria-label="Name" value="World">
+    <button id="greet" type="button">Greet</button>
+    <output id="result" aria-live="polite">Not greeted</output>
+    <script>
+      document.querySelector('#greet').addEventListener('click', async () => {
+        const name = document.querySelector('#name').value;
+        document.querySelector('#result').textContent = await window.fixtureApi.greet(name);
+      });
+    </script>
+  </body>
+</html>

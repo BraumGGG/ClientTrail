@@ -1,0 +1,22 @@
+{
+  "name": "client-testing-skill",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:contract": "vitest run --config vitest.root.config.ts",
+    "typecheck": "tsc -b --pretty false",
+    "client-test": "tsx packages/cli/src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

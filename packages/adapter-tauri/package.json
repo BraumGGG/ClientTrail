@@ -1,0 +1,13 @@
+{
+  "name": "@client-test/adapter-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@client-test/core": "workspace:*",
+    "@iarna/toml": "^3.0.0"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.client-test/artifacts/
+fixtures/**/node_modules/
+fixtures/**/package-lock.json
+fixtures/**/test-results/
+.DS_Store
+*.log

@@ -1,0 +1,11 @@
+{
+  "name": "@client-test/adapter-webview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@client-test/core": "workspace:*",
+    "playwright-core": "^1.62.1"
+  }
+}
