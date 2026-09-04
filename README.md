@@ -35,6 +35,14 @@ pnpm exec tsx packages/cli/src/main.ts setup --yes
 pnpm exec tsx packages/cli/src/main.ts run --all --json
 ```
 
+After building, expose the CLI as a local global command when another project or Agent needs to invoke it:
+
+```powershell
+pnpm build
+pnpm link --global
+client-test doctor --project <project-root> --json
+```
+
 Explore through MCP:
 
 ```powershell
