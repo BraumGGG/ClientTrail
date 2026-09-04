@@ -21,4 +21,16 @@ describe("Tauri setup plan", () => {
     expect(plan.dependencies).toContain("@wdio/tauri-service");
     expect(plan.commands[0]?.executable).toBe("pnpm");
   });
+
+  it("plans only the Rust entry point that will actually be modified", async () => {
+    const root = await tauriRoot();
+    await mkdir(join(root, "src-tauri", "src"));
+    const main = join(root, "src-tauri", "src", "main.rs");
+    await writeFile(main, "fn main() {}\n");
+
+    const plan = await createTauriSetupPlan(await createProjectContext(root));
+    expect(plan.filesToModify).toContain(main);
+    expect(plan.filesToModify).not.toContain(join(root, "src-tauri", "capabilities", "default.json"));
+    expect(plan.filesToModify).not.toContain(join(root, "src", "main.ts"));
+  });
 });

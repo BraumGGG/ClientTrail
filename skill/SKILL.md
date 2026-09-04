@@ -11,12 +11,24 @@ description: 为 Tauri 2、Electron、Windows 原生和 macOS 原生桌面客户
 
 - 被测项目根目录（必须由用户提供或从当前工作目录明确推断）。
 - 技术栈声明：Tauri 2、Electron、Windows 原生、macOS 原生，以及可选的 Python/Rust 后端。
-- 测试目标、关键业务流程和是否允许修改源码。
+- 测试目标和关键业务流程。
 - 可选的 WebView/CDP 地址、应用启动命令、原生自动化 helper 命令。
 
 如果项目路径、技术栈或权限不明确，先报告缺失信息，不要猜测或修改文件。
 
-用户不需要手动拼接 CLI 命令。只要提供 Skill 名称、被测项目位置（当前工作目录、自然语言路径或已打开的项目）和测试要求，Agent 就应该自动完成路径解析、CLI 定位、环境检查、setup 计划、依赖安装、测试配置生成、测试执行和 evidence 读取。
+用户不需要手动拼接 CLI 命令。只要提供 Skill 名称、被测项目位置（当前工作目录、自然语言路径或已打开的项目）和测试要求，Agent 就应该自动完成路径解析、CLI 定位、环境检查、setup 计划、经确认的测试接入、测试执行和 evidence 读取。
+
+## 测试边界（强制）
+
+ClientTrail 的职责是执行真实业务测试并给出可追溯的测试结论，不负责修复、重构或改进被测产品。
+
+- `doctor`、`run`、`evidence` 和失败诊断阶段不得修改被测项目的源码、配置、依赖、数据库或业务数据。
+- 不得为了让用例通过而修改业务逻辑、放宽断言、伪造状态、写入生产数据或绕过权限与审批。
+- 只允许在独立的 setup 接入阶段进行测试基础设施变更，而且必须先执行 `setup --dry-run --json`，完整展示依赖、创建文件、修改文件和 `productionRisk`，获得用户对本次计划的明确确认后才能执行。
+- 经确认后，setup 仅可安装测试所需依赖、创建 E2E 配置与测试草稿，以及为测试模式修改 `package.json`、Tauri 配置、`main.rs`/`lib.rs` 等启动接线。所有能力必须限制在 Debug/Test 构建，不得进入 Release 行为。
+- setup 计划之外出现任何新增文件修改、覆盖已有配置、生产风险扩大或业务代码改动时，立即停止并重新请求确认。
+- 测试失败后只报告结论、证据、失败分类和产品侧修复建议；除非用户另行明确委托修复，否则不得修改被测项目。
+- 允许写入的运行产物仅限项目配置的 `.client-test` evidence 目录和测试框架自身既有输出目录；不得将运行产物复制进源码、Skill 或 ClientTrail 仓库。
 
 ## 不适用场景
 
@@ -43,11 +55,11 @@ intake -> doctor -> strategy -> setup-plan -> confirmation -> setup
 3. 识别单仓库和多目录项目：先找到包含 `package.json`、`Cargo.toml`、`tauri.conf.json` 或 `pyproject.toml` 的实际子项目根目录。若 worktree 根是 Python/工作流仓库而 `desktop/` 是 Tauri 子项目，Tauri doctor/run 必须使用 `desktop/`，后端测试可继续使用 worktree 根。
 4. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
 4. 若项目尚未接入测试，自动执行 `setup --dry-run --json`，用自然语言汇总将安装的依赖、创建/修改的文件和风险，并只请求一次确认。
-5. 用户确认后自动执行 `setup --yes`；若命令失败，停止后续测试并报告具体依赖或权限错误。
+5. 用户对当前 dry-run 计划明确确认后自动执行 `setup --yes`；确认只适用于已展示的计划，若命令失败或实际变更超出计划，停止后续测试并报告具体依赖、权限或越界修改。
 6. 自动执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
 7. 自动读取最近一次 evidence，给出通过/失败、最小复现命令、证据文件和可优化项。
 
-用户只要求“测试一下”时，默认执行 doctor → setup 计划 → 请求确认 → setup → run → evidence；不要把内部命令列表当作用户前置工作。
+用户只要求“测试一下”时，默认执行 doctor。已有测试能力时直接 run → evidence；缺少测试接入时才执行 setup 计划 → 请求确认 → setup → run → evidence。不要把内部命令列表当作用户前置工作。
 
 ## 1. 项目接入
 
@@ -72,7 +84,7 @@ client-test doctor --project <project-root> --json
 
 需要选择 Tauri 具体策略时读取 [references/tauri-strategy.md](references/tauri-strategy.md)。
 
-源码可修改时使用白盒模式。只有安装包或第三方二进制时使用黑盒模式。不要为了统一接口而牺牲 DOM、IPC、Rust 或 Main Process 的可观测性。
+已存在测试接线时优先使用白盒模式。只有安装包或第三方二进制时使用黑盒模式。新增白盒接线只能通过已确认的 setup 计划完成；不要为了统一接口而牺牲 DOM、IPC、Rust 或 Main Process 的可观测性。
 
 ## 3. 安装前确认
 
@@ -82,7 +94,7 @@ client-test doctor --project <project-root> --json
 client-test setup --project <project-root> --dry-run --json
 ```
 
-向用户展示依赖、待创建文件、待修改文件、命令和 `productionRisk`。没有用户明确确认时不要修改项目。不要覆盖已有测试配置；冲突必须停止并报告具体字段。用户确认后由 Agent 自动执行 setup，不要求用户复制命令。
+向用户展示依赖、待创建文件、待修改文件、命令和 `productionRisk`。确认必须针对当前计划单独取得，不能用用户此前的笼统授权代替。没有用户明确确认时不要修改项目。不要覆盖已有测试配置；冲突必须停止并报告具体字段。用户确认后由 Agent 自动执行 setup，不要求用户复制命令。
 
 ## 4. 探索模式
 
@@ -155,14 +167,15 @@ client-test evidence --project <project-root> --run <run-id> --file stderr.log -
 3. 执行过的命令及退出码。
 4. 测试汇总：通过、失败、环境错误和未执行套件。
 5. `runId`、`artifactDirectory` 和关键证据文件。
-6. 已修改文件、安装的依赖和用户需要复核的风险。
+6. setup 阶段已修改文件、安装的依赖和用户需要复核的风险；若未执行 setup，明确写“未修改被测项目”。
 7. 未验证的平台能力和下一步建议。
 
 不得把 AI 推断写成测试框架结果；不得编造通过率、截图、日志或业务状态。
 
 ## 安全约束
 
-- setup 默认只读；必须先 dry-run。
+- setup 默认只读；必须先 dry-run 并对当前计划取得单独确认。
+- run 和 diagnosis 永远只读，除 evidence 目录与既有测试输出外不得写入被测项目。
 - 所有路径必须位于项目根目录或 `.client-test` 目录。
 - 测试插件只允许在 Debug/Test feature 中启用。
 - Release 检查发现测试端口、测试插件或重置接口泄漏时必须失败。

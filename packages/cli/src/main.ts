@@ -78,7 +78,7 @@ export function createCli(): Command {
         for (const command of plan.commands) {
           const executable = process.platform === "win32" && ["pnpm", "npm", "yarn", "bun"].includes(command.executable) ? `${command.executable}.cmd` : command.executable;
           const commandResult = await runProcess({ ...command, executable }, { timeoutMs: 300_000, redact: context.config.artifacts.redact });
-          commandResults.push({ command: { ...command, executable }, exitCode: commandResult.exitCode, timedOut: commandResult.timedOut, stdout: commandResult.stdout, stderr: commandResult.stderr });
+          commandResults.push({ command: { ...command, executable }, exitCode: commandResult.exitCode, timedOut: commandResult.timedOut, spawnError: commandResult.spawnError, stdout: commandResult.stdout, stderr: commandResult.stderr });
           if (commandResult.timedOut || commandResult.exitCode !== 0) {
             process.exitCode = 2;
             break;
@@ -100,7 +100,8 @@ export function createCli(): Command {
         const aggregate = aggregateResults(results);
         if (options.json) console.log(JSON.stringify({ ...aggregate, suites: results }));
         else console.log(`${aggregate.status}: ${results.length} suite(s), failures: ${aggregate.failureKinds.join(", ") || "none"}`);
-        if (aggregate.status !== "passed") process.exitCode = 3;
+        if (aggregate.status === "error") process.exitCode = 2;
+        else if (aggregate.status === "failed") process.exitCode = 3;
         return;
       }
       if (name === "generate") {

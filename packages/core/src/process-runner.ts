@@ -1,23 +1,43 @@
-import { spawn } from "node:child_process";
+import crossSpawn from "cross-spawn";
 import type { CommandSpec } from "./contracts.js";
 import { redactText } from "./redaction.js";
 
-export interface ProcessResult { exitCode: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string; timedOut: boolean; }
+export interface ProcessResult {
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  spawnError?: string;
+}
 
 export function runProcess(spec: CommandSpec, options: { timeoutMs?: number; redact?: boolean } = {}): Promise<ProcessResult> {
   const { timeoutMs = 120_000, redact = true } = options;
-  return new Promise((resolve, reject) => {
-    const child = spawn(spec.executable, spec.args, { cwd: spec.cwd, windowsHide: true, shell: false });
+  return new Promise((resolve) => {
+    const child = crossSpawn(spec.executable, spec.args, { cwd: spec.cwd, windowsHide: true, shell: false });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
-    child.once("error", (error) => { clearTimeout(timer); reject(error); });
-    child.once("close", (exitCode, signal) => {
+    let settled = false;
+    const finish = (result: ProcessResult) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve({ exitCode, signal, stdout: redact ? redactText(stdout) : stdout, stderr: redact ? redactText(stderr) : stderr, timedOut });
+      resolve({
+        ...result,
+        stdout: redact ? redactText(result.stdout) : result.stdout,
+        stderr: redact ? redactText(result.stderr) : result.stderr,
+      });
+    };
+    const timer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMs);
+    child.stdout?.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.once("error", (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      finish({ exitCode: null, signal: null, stdout, stderr: stderr || message, timedOut: false, spawnError: message });
+    });
+    child.once("close", (exitCode, signal) => {
+      finish({ exitCode, signal, stdout, stderr, timedOut });
     });
   });
 }

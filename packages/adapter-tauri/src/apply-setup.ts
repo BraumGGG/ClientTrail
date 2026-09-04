@@ -39,6 +39,7 @@ export async function applyTauriSetupPlan(context: ProjectContext, plan: SetupPl
   if (plan.productionRisk === "blocked") throw new Error("Cannot set up Tauri testing: Tauri 2 was not detected");
   const cargoPath = join(context.projectRoot, "src-tauri", "Cargo.toml");
   const libPath = join(context.projectRoot, "src-tauri", "src", "lib.rs");
+  const mainPath = join(context.projectRoot, "src-tauri", "src", "main.rs");
   const cargoText = await readFile(cargoPath, "utf8");
   const cargo = parse(cargoText) as Record<string, any>;
   const binaryName = String(cargo.package?.name ?? "app").replace(/-/g, "_");
@@ -69,18 +70,30 @@ export async function applyTauriSetupPlan(context: ProjectContext, plan: SetupPl
       changedFiles.push(cargoPath);
     }
   }
-  if (plan.filesToModify.includes(libPath) && existsSync(libPath)) {
-    const libText = await readFile(libPath, "utf8");
-    if (!libText.includes("tauri_plugin_wdio::init()") || !libText.includes("tauri_plugin_wdio_webdriver::init()")) {
-      const marker = "    builder\n        .run(";
-      if (!libText.includes(marker)) throw new Error("Could not find Tauri builder run chain in src-tauri/src/lib.rs");
+  const rustPath = plan.filesToModify.includes(libPath) && existsSync(libPath)
+    ? libPath
+    : plan.filesToModify.includes(mainPath) && existsSync(mainPath)
+      ? mainPath
+      : undefined;
+  if (rustPath) {
+    const rustText = await readFile(rustPath, "utf8");
+    if (!rustText.includes("tauri_plugin_wdio::init()") || !rustText.includes("tauri_plugin_wdio_webdriver::init()")) {
       const pluginLines = [
-        !libText.includes("tauri_plugin_wdio::init()") ? "        .plugin(tauri_plugin_wdio::init())" : "",
-        !libText.includes("tauri_plugin_wdio_webdriver::init()") ? "        .plugin(tauri_plugin_wdio_webdriver::init())" : "",
+        !rustText.includes("tauri_plugin_wdio::init()") ? "        .plugin(tauri_plugin_wdio::init())" : "",
+        !rustText.includes("tauri_plugin_wdio_webdriver::init()") ? "        .plugin(tauri_plugin_wdio_webdriver::init())" : "",
       ].filter(Boolean).join("\n");
-      const injected = `    #[cfg(feature = "client-test")]\n    let builder = builder\n${pluginLines};\n\n`;
-      await writeFile(libPath, libText.replace(marker, `${injected}${marker}`), "utf8");
-      changedFiles.push(libPath);
+      const runMarker = /^(\s*)builder\s*\r?\n\s*\.run\(/m;
+      const appBuilderMarker = /^(\s*)let app = tauri::Builder::default\(\)/m;
+      let nextRust: string;
+      if (runMarker.test(rustText)) {
+        nextRust = rustText.replace(runMarker, (_match, indent: string) => `${indent}#[cfg(feature = "client-test")]\n${indent}let builder = builder\n${pluginLines};\n\n${indent}builder\n${indent}    .run(`);
+      } else if (appBuilderMarker.test(rustText)) {
+        nextRust = rustText.replace(appBuilderMarker, (_match, indent: string) => `${indent}let builder = tauri::Builder::default();\n${indent}#[cfg(feature = "client-test")]\n${indent}let builder = builder\n${pluginLines};\n\n${indent}let app = builder`);
+      } else {
+        throw new Error(`Could not find a supported Tauri builder chain in ${rustPath}`);
+      }
+      await writeFile(rustPath, nextRust, "utf8");
+      changedFiles.push(rustPath);
     }
   }
   return { changedFiles };

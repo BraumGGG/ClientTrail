@@ -15,7 +15,8 @@ export async function runCargoTest(context: ProjectContext, options: { timeoutMs
   const result = await runProcess({ executable: "cargo", args: ["test", "--message-format", "json"], cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
   await session.write("cargo.stdout.jsonl", result.stdout);
   await session.write("cargo.stderr.log", result.stderr);
-  const status = result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
-  await session.finalize(status, { exitCode: result.exitCode, timedOut: result.timedOut, adapter: "cargo-test" });
-  return { status, runId: session.runId, artifactDirectory: session.directory, exitCode: result.exitCode, failureKind: result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion" };
+  const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
+  const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
+  await session.finalize(status, { exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind, adapter: "cargo-test" });
+  return { status, runId: session.runId, artifactDirectory: session.directory, exitCode: result.exitCode, failureKind };
 }

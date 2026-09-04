@@ -22,8 +22,7 @@ export async function createTauriSetupPlan(context: ProjectContext): Promise<Set
   const cargoToml = join(context.projectRoot, "src-tauri", "Cargo.toml");
   const tauriMain = join(context.projectRoot, "src-tauri", "src", "main.rs");
   const tauriLib = join(context.projectRoot, "src-tauri", "src", "lib.rs");
-  const capabilities = join(context.projectRoot, "src-tauri", "capabilities", "default.json");
-  const frontendEntry = join(context.projectRoot, "src", "main.ts");
+  const rustEntry = existsSync(tauriLib) ? tauriLib : tauriMain;
   const dependencies = ["@wdio/cli", "@wdio/local-runner", "@wdio/mocha-framework", "@wdio/spec-reporter", "@wdio/types", "@wdio/tauri-service", "@wdio/tauri-plugin"];
   const executable = context.packageManager ?? "pnpm";
   const installArgs = executable === "npm" ? ["install", "--save-dev", ...dependencies] : executable === "yarn" ? ["add", "--dev", ...dependencies] : executable === "bun" ? ["add", "--dev", ...dependencies] : ["add", "-D", ...dependencies];
@@ -31,7 +30,7 @@ export async function createTauriSetupPlan(context: ProjectContext): Promise<Set
     projectRoot: context.projectRoot,
     dependencies: dependencies.filter((dependency) => !existsSync(join(context.projectRoot, "node_modules", dependency))),
     filesToCreate: [wdioConfig, smokeTest].filter((file) => !existsSync(file)),
-    filesToModify: [packageJson, cargoToml, tauriMain, tauriLib, capabilities, frontendEntry].filter((file) => existsSync(file)),
+    filesToModify: [packageJson, cargoToml, rustEntry].filter((file) => existsSync(file)),
     commands: dependencies.filter((dependency) => !existsSync(join(context.projectRoot, "node_modules", dependency))).length > 0
       ? [{ executable, args: installArgs, cwd: context.projectRoot }]
       : [],

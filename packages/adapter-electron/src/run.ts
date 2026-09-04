@@ -10,7 +10,8 @@ export async function runElectronSuite(context: ProjectContext, options: { timeo
   const result = await runProcess({ executable, args, cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
   await session.write("electron.stdout.log", result.stdout);
   await session.write("electron.stderr.log", result.stderr);
-  const status = result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
-  await session.finalize(status, { adapter: "electron", command: { executable, args }, exitCode: result.exitCode, timedOut: result.timedOut });
-  return { status, runId: session.runId, artifactDirectory: join(session.directory), exitCode: result.exitCode, failureKind: result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion" };
+  const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
+  const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
+  await session.finalize(status, { adapter: "electron", command: { executable, args }, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind });
+  return { status, runId: session.runId, artifactDirectory: join(session.directory), exitCode: result.exitCode, failureKind };
 }

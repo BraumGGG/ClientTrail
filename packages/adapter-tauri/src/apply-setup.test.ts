@@ -24,4 +24,22 @@ describe("Tauri setup application", () => {
     expect(readFileSync(join(root, "wdio.conf.ts"), "utf8")).toContain("appBinaryPath");
     expect(readFileSync(join(root, "src-tauri", "Cargo.toml"), "utf8")).toContain("tauri-plugin-wdio-webdriver");
   });
+
+  it("injects test-only plugins into a main.rs Tauri builder", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tauri-main-apply-"));
+    mkdirSync(join(root, "src-tauri", "src"), { recursive: true });
+    await writeFile(join(root, "package.json"), "{\"name\":\"main-only\"}\n");
+    await writeFile(join(root, "src-tauri", "Cargo.toml"), "[package]\nname = \"main-only\"\n[dependencies]\ntauri = { version = \"2\" }\n");
+    await writeFile(join(root, "src-tauri", "src", "main.rs"), "fn main() {\n    let app = tauri::Builder::default()\n        .build(tauri::generate_context!())\n        .unwrap();\n    app.run(|_, _| {});\n}\n");
+
+    const context = await createProjectContext(root);
+    const plan = await createTauriSetupPlan(context);
+    expect(plan.filesToModify).toContain(join(root, "src-tauri", "src", "main.rs"));
+    await applyTauriSetupPlan(context, plan);
+
+    const main = readFileSync(join(root, "src-tauri", "src", "main.rs"), "utf8");
+    expect(main).toContain("#[cfg(feature = \"client-test\")]");
+    expect(main).toContain("tauri_plugin_wdio::init()");
+    expect(main).toContain("let app = builder");
+  });
 });

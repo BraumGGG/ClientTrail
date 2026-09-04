@@ -16,9 +16,11 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   const build = await runProcess({ executable: buildExecutable, args: buildArgs, cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
   await session.write("build.stdout.log", build.stdout);
   await session.write("build.stderr.log", build.stderr);
-  if (build.timedOut || build.exitCode !== 0) {
-    await session.finalize("failed", { failureKind: build.timedOut ? "timeout" : "build", phase: "build", exitCode: build.exitCode, command: { executable: buildExecutable, args: buildArgs } });
-    return { status: "failed" as const, runId: session.runId, artifactDirectory: session.directory, failureKind: build.timedOut ? "timeout" as const : "build" as const, exitCode: build.exitCode };
+  if (build.spawnError || build.timedOut || build.exitCode !== 0) {
+    const status = build.spawnError ? "error" as const : "failed" as const;
+    const failureKind = build.spawnError ? "environment" as const : build.timedOut ? "timeout" as const : "build" as const;
+    await session.finalize(status, { failureKind, phase: "build", exitCode: build.exitCode, spawnError: build.spawnError, command: { executable: buildExecutable, args: buildArgs } });
+    return { status, runId: session.runId, artifactDirectory: session.directory, failureKind, exitCode: build.exitCode };
   }
   const args = packageManager === "npm"
     ? ["exec", "wdio", "--", "run", "wdio.conf.ts"]
@@ -32,8 +34,8 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   const result = await runProcess({ executable, args, cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
   await session.write("stdout.log", result.stdout);
   await session.write("stderr.log", result.stderr);
-  const status: RunStatus = result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
-  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, timedOut: result.timedOut, command: { executable: packageManager, args, cwd: context.projectRoot } });
-  const failureKind: FailureKind | undefined = result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion";
+  const status: RunStatus = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
+  const failureKind: FailureKind | undefined = result.spawnError ? "environment" : result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion";
+  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, timedOut: result.timedOut, spawnError: result.spawnError, failureKind, command: { executable: packageManager, args, cwd: context.projectRoot } });
   return { status, runId: session.runId, artifactDirectory: join(session.directory), failureKind, exitCode: result.exitCode };
 }
