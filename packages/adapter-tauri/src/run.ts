@@ -1,10 +1,21 @@
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "@iarna/toml";
 import { EvidenceSession, runProcess } from "@client-test/core";
 import type { FailureKind, ProjectContext, RunStatus } from "@client-test/core";
 
 export async function runTauriSuite(context: ProjectContext, options: { suite?: string; timeoutMs?: number } = {}) {
   const session = await EvidenceSession.create(context);
   const packageManager = context.packageManager ?? "pnpm";
+  const manifestPath = join(context.projectRoot, "src-tauri", "Cargo.toml");
+  const cargo = existsSync(manifestPath) ? parse(readFileSync(manifestPath, "utf8")) as Record<string, any> : {};
+  const features = cargo.features as Record<string, unknown> | undefined;
+  if (!features || !("client-test" in features)) {
+    const message = "Tauri project does not define the client-test feature; run setup in an isolated worktree or use an existing external WebView/CDP test entrypoint";
+    await session.write("setup-required.txt", message);
+    await session.finalize("error", { adapter: "tauri-2", failureKind: "environment", phase: "preflight", message, manifestPath });
+    return { status: "error" as const, runId: session.runId, artifactDirectory: session.directory, failureKind: "environment" as const };
+  }
   const buildArgs = packageManager === "npm"
     ? ["exec", "tauri", "--", "build", "--debug", "--no-bundle", "--features", "client-test"]
     : packageManager === "yarn"
