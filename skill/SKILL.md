@@ -35,6 +35,36 @@ ClientTrail 的职责是执行真实业务测试并给出可追溯的测试结�
 - 测试失败后只报告结论、证据、失败分类和产品侧修复建议；除非用户另行明确委托修复，否则不得修改被测项目。
 - 允许写入的运行产物仅限项目配置的 `.client-test` evidence 目录和测试框架自身既有输出目录；不得将运行产物复制进源码、Skill 或 ClientTrail 仓库。
 
+## setup 定义与决策规则
+
+`setup` 不是业务测试本身，而是为缺少自动化入口的项目增加测试基础设施和可观测性。它可能执行以下操作：
+
+- 安装 WebdriverIO、Tauri Service、Playwright 或其他测试运行依赖；
+- 更新 `package.json` 及 npm/pnpm/yarn/bun 锁文件；
+- 创建 `wdio.conf.ts`、Playwright 配置、E2E 测试草稿和测试脚本；
+- 在 Tauri 项目中更新 `Cargo.toml`，增加可选测试依赖和 `client-test` feature；
+- 在 `main.rs`/`lib.rs` 中增加测试插件接线，且必须使用 `#[cfg(feature = "client-test")]` 或等效 Test/Debug 门控；
+- 生成测试所需的 capability、启动参数或外部 helper 配置。
+
+AI 必须先判断只读模式是否足够，再决定是否提出 setup：
+
+| 判断 | 行为 |
+| --- | --- |
+| 项目已有可运行的 E2E、CDP/WebDriver、Accessibility、sidecar API 或测试命令 | 不使用 setup，直接执行已有测试和证据读取 |
+| 只缺少路径、环境变量、启动参数或测试目标说明 | 不使用 setup，补充运行参数或报告缺失信息 |
+| 没有任何可连接的客户端自动化入口，且用户要求验证 WebView DOM、真实窗口交互或完整客户端链路 | 提议 setup，但只在隔离副本/worktree 中执行 |
+| 只读测试已能覆盖用户要求 | 不使用 setup；不得为了增加覆盖率擅自修改项目 |
+
+提出 setup 前必须向用户明确说明：
+
+1. 为什么只读模式无法完成目标，以及具体缺失的测试入口。
+2. setup 会增加哪些依赖、配置、测试文件和 Tauri 测试接线。
+3. setup 会修改隔离副本，但不会修改正式项目；正式项目不会接收这些文件或锁文件。
+4. 哪些测试可以因此新增，哪些风险仍然存在，例如构建时间、依赖下载、测试插件兼容性和 `productionRisk`。
+5. 如果不使用 setup，将只能得到哪些有限结论和哪些“未覆盖/环境阻塞”结论。
+
+只有用户明确确认“在隔离副本中执行这个 setup 计划”后，AI 才能创建隔离目录并运行 setup。用户始终拥有最终决定权；未确认、拒绝或确认内容不明确时，保持正式项目只读并给出有限测试结论。
+
 ## 不适用场景
 
 - 移动端应用测试。
@@ -63,10 +93,10 @@ intake -> doctor -> isolated-worktree -> setup-plan -> confirmation -> setup
 2. 自动定位 ClientTrail CLI：优先使用当前仓库的 `pnpm client-test`；否则查找包含 `packages/cli/src/main.ts` 的 ClientTrail checkout，并执行 `pnpm --dir <clienttrail-root> client-test`。禁止假设系统存在全局 `client-test` 可执行文件；找不到 checkout 时报告安装位置，不伪造结果。
 3. 识别单仓库和多目录项目：先找到包含 `package.json`、`Cargo.toml`、`tauri.conf.json` 或 `pyproject.toml` 的实际子项目根目录。若 worktree 根是 Python/工作流仓库而 `desktop/` 是 Tauri 子项目，Tauri doctor/run 必须使用 `desktop/`，后端测试可继续使用 worktree 根。
 4. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
-4. 若项目已有测试接线，直接执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
-5. 若项目没有测试接线，报告“正式项目只读模式无法执行该套件”，不要在正式项目执行 setup。
-6. 用户要求完整接入时，创建隔离副本或临时 worktree，在隔离目录执行 dry-run → 单独确认 → setup → run。
-7. 只读取隔离目录的 evidence，测试结论必须标注运行目录和“正式项目未修改”。
+5. 若项目已有测试接线，直接执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
+6. 若项目没有测试接线，报告“正式项目只读模式无法执行该套件”，不要在正式项目执行 setup。
+7. 用户要求完整接入时，创建隔离副本或临时 worktree，在隔离目录执行 dry-run → 单独确认 → setup → run。
+8. 只读取隔离目录的 evidence，测试结论必须标注运行目录和“正式项目未修改”。
 
 用户只要求“测试一下”时，默认执行 doctor。已有测试能力时直接 run → evidence；缺少测试接入时只报告阻塞，不执行 setup。不要把内部命令列表当作用户前置工作。
 
@@ -97,7 +127,7 @@ client-test doctor --project <project-root> --json
 
 ## 3. 安装前确认
 
-先自动调用：
+仅当已决定提出 setup、且已经准备使用隔离目录时调用：
 
 ```text
 client-test setup --project <project-root> --dry-run --json
