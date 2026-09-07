@@ -134,6 +134,7 @@ recover
 - 每次注入必须记录目标实例、注入阶段、开始/结束时间、关联任务或 `run_id`、恢复动作和最终状态。
 - 故障注入必须运行在 Debug/Test 或隔离环境；不得向生产服务、真实 Provider 或用户数据注入故障。
 - 外部 `taskkill`、端口阻断或进程操作只能标记为粗粒度注入，不得声称覆盖了 Worker 内部阶段。
+- 多实例注入必须使用 adapter 返回的实例级控制句柄，至少应包含 `instanceId`，并尽可能提供 `pid`、监听端口、`appDataDirectory`、`controlDirectory` 和外部依赖句柄。仅按项目根目录、进程名或二进制文件名匹配时，必须拒绝执行并报告 `fault_target_ambiguous`。
 
 #### 多实例隔离预检
 
@@ -166,7 +167,7 @@ cargoTargetDirectory
 - 实际 executable、args、cwd 和环境变量摘要；
 - 构建 commit、应用版本、adapter 版本和 package lock 标识。
 
-环境变量必须脱敏。无法计算 hash 时记录 `not-produced` 和原因，不能静默省略。两个实例的 provenance 不完整时，结果最多为“测试通过但构建独立性未验证”。
+环境变量必须脱敏。无法计算 hash 时记录 `not-produced` 和原因，不能静默省略。两个实例的 provenance 不完整时，结果最多为“测试通过但构建独立性未验证”。启动器必须记录实际启动 PID；能够访问文件时自动计算二进制和资源目录 SHA-256，无法计算时将 provenance 维度标记为 `incomplete`。
 
 #### 依赖图和阻塞传播
 
@@ -180,7 +181,7 @@ cargoTargetDirectory
 }
 ```
 
-报告分别统计根因失败、独立失败、级联阻塞、跳过和未执行。不得把级联错误计为多个业务失败。测试框架无法自动跳过时，Skill 至少要根据时间线重分类，并停止继续发送无意义请求。
+报告分别统计根因失败、独立失败、级联阻塞、跳过和未执行。不得把级联错误计为多个业务失败。测试框架无法自动跳过时，Skill 至少要根据时间线重分类，并停止继续发送无意义请求。Provider、许可证、凭据或关键前置资源未满足时，编排器应在前置阶段停止依赖套件，后续用例输出 `blocked`、`blocked_by` 或 `not_executed`。
 
 #### Provider live/record/replay
 
@@ -218,7 +219,7 @@ budget = clamp(
 
 - “完整 UI 覆盖”只有在存在视图/页面清单，并且每项都有访问、交互和断言证据时才能使用；否则写成“已验证的 UI 范围”。
 - 预期的 `404`、`409`、拒绝或隔离响应必须在用例中标记为 `expected_negative_case`，说明为什么该响应代表通过。
-- 稳定性测试必须报告迭代次数、持续时间、失败重试次数和 Provider 模式；少量重复执行只能称为“重复回归通过”，不能自动升级为“长时间稳定”。
+- 稳定性测试必须报告迭代次数、持续时间、失败重试次数和 Provider 模式；少量重复执行只能称为“重复回归通过”，不能自动升级为“长时间稳定”。执行器对档位有最低门槛：`soak` 至少 10 次且持续 15 分钟，`stress` 至少 20 次且持续 5 分钟。
 
 ### 后端套件命令发现
 
@@ -414,6 +415,9 @@ environment -> build -> launch -> locator -> timeout -> assertion
 client-test evidence --project <project-root> --json
 client-test evidence --project <project-root> --run <run-id> --file result.json --json
 client-test evidence --project <project-root> --run <run-id> --file stderr.log --tail 200
+
+# 失败后生成脱敏最小复现包
+client-test diagnose --project <project-root> --result <run-dir>\\result.json --repro --json
 ```
 
 如果用户要求复盘，先列出最近 run，再读取 `result.json`、`manifest.json` 和与失败分类对应的日志；不要把运行产物复制回 Skill 或仓库。

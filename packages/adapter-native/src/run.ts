@@ -1,4 +1,4 @@
-import { EvidenceSession, parseCommand, runProcess } from "@client-test/core";
+import { EvidenceSession, parseCommand, runProcess, correctFailureKind } from "@client-test/core";
 import type { ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export type NativeOperation = "snapshot" | "find" | "invoke" | "wait";
@@ -33,6 +33,6 @@ export async function runNativeSuite(context: ProjectContext, options: { timeout
   await session.write("native.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  await session.finalize(status, { adapter: "native", exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind });
+  await session.finalize(status, { adapter: "native", pid: result.pid, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "native", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }) });
   return { status, failureKind, runId: session.runId, artifactDirectory: session.directory, exitCode: result.exitCode };
 }

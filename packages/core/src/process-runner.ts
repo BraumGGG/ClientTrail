@@ -3,6 +3,7 @@ import type { CommandSpec } from "./contracts.js";
 import { redactText } from "./redaction.js";
 
 export interface ProcessResult {
+  pid?: number;
   exitCode: number | null;
   signal: NodeJS.Signals | null;
   stdout: string;
@@ -24,6 +25,7 @@ export function runProcess(spec: CommandSpec, options: { timeoutMs?: number; red
       settled = true;
       clearTimeout(timer);
       resolve({
+        pid: child.pid,
         ...result,
         stdout: redact ? redactText(result.stdout) : result.stdout,
         stderr: redact ? redactText(result.stderr) : result.stderr,

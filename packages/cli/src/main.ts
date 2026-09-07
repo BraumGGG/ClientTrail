@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { isPathInside } from "@client-test/core";
 import { generateWdioDraft } from "@client-test/core";
 import { runProcess } from "@client-test/core";
-import { diagnoseResult, validateTestContract, type TestContract } from "@client-test/core";
+import { diagnoseResult, validateTestContract, createMinimalReproPackage, type TestContract } from "@client-test/core";
 import { readFileSync } from "node:fs";
 
 export function createCli(): Command {
@@ -30,7 +30,7 @@ export function createCli(): Command {
     if (name === "setup") command.option("--dry-run", "show the setup plan without changing files").option("--yes", "apply the plan without prompting").option("--json", "emit machine-readable JSON");
     if (name === "run") command.option("--suite <name>", "WDIO suite name").option("--all", "run all detected suites").option("--json", "emit machine-readable JSON").option("--timeout <ms>", "test timeout in milliseconds", "120000").option("--contract <path>", "冻结的 test-contract.json（相对项目根目录）");
     if (name === "generate") command.option("--actions <path>", "recorded actions JSON file").option("--output <path>", "generated test file").option("--force", "overwrite an existing output file").option("--validate", "run TypeScript validation after generation").option("--json", "emit machine-readable JSON");
-    if (name === "diagnose") command.option("--result <path>", "result.json path").option("--artifacts <path>", "artifact directory").option("--json", "emit machine-readable JSON");
+    if (name === "diagnose") command.option("--result <path>", "result.json path").option("--artifacts <path>", "artifact directory").option("--repro", "生成失败最小复现包").option("--json", "emit machine-readable JSON");
     if (name === "evidence") command.option("--run <id>", "evidence run id").option("--file <name>", "file inside the run directory").option("--tail <lines>", "return only the last N lines").option("--json", "emit machine-readable JSON");
     command.action(async () => {
       if (name === "doctor") {
@@ -137,13 +137,20 @@ export function createCli(): Command {
         return;
       }
       if (name === "diagnose") {
-        const options = command.opts<{ project: string; result?: string; artifacts?: string; json?: boolean }>();
+        const options = command.opts<{ project: string; result?: string; artifacts?: string; repro?: boolean; json?: boolean }>();
         if (!options.result) throw new Error("diagnose requires --result");
         const context = await createProjectContext(options.project);
         const resultPath = join(context.projectRoot, options.result);
         if (!isPathInside(context.projectRoot, resultPath)) throw new Error("result path must remain inside the project root");
-        const diagnosis = diagnoseResult(JSON.parse(readFileSync(resultPath, "utf8")), options.artifacts ? join(context.projectRoot, options.artifacts) : dirname(resultPath));
-        if (options.json) console.log(JSON.stringify(diagnosis)); else console.log(`${diagnosis.kind}: ${diagnosis.remediation}\nEvidence: ${diagnosis.evidence.join(", ") || "none"}`);
+        const artifactDirectory = options.artifacts ? join(context.projectRoot, options.artifacts) : dirname(resultPath);
+        const rawResult = JSON.parse(readFileSync(resultPath, "utf8"));
+        const diagnosis = diagnoseResult(rawResult, artifactDirectory);
+        let reproDirectory: string | undefined;
+        if (options.repro && rawResult.status !== "passed") {
+          reproDirectory = await createMinimalReproPackage({ artifactDirectory, files: diagnosis.evidence, command: rawResult.command, stateTimeline: rawResult.stateTimeline });
+        }
+        const output = { ...diagnosis, reproDirectory };
+        if (options.json) console.log(JSON.stringify(output)); else console.log(`${diagnosis.kind}: ${diagnosis.remediation}\nEvidence: ${diagnosis.evidence.join(", ") || "none"}${reproDirectory ? `\nRepro: ${reproDirectory}` : ""}`);
         return;
       }
       if (name === "evidence") {

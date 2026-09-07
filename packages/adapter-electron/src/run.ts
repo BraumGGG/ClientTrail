@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { EvidenceSession, runProcess } from "@client-test/core";
+import { EvidenceSession, runProcess, correctFailureKind } from "@client-test/core";
 import type { ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export async function runElectronSuite(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
@@ -12,6 +12,6 @@ export async function runElectronSuite(context: ProjectContext, options: { timeo
   await session.write("electron.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  await session.finalize(status, { adapter: "electron", command: { executable, args }, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind });
+  await session.finalize(status, { adapter: "electron", command: { executable, args }, pid: result.pid, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "playwright", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }) });
   return { status, runId: session.runId, artifactDirectory: join(session.directory), exitCode: result.exitCode, failureKind };
 }

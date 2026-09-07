@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { EvidenceSession, runProcess } from "@client-test/core";
+import { EvidenceSession, runProcess, correctFailureKind } from "@client-test/core";
 import type { DetectionResult, ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export function detectPytest(context: ProjectContext): DetectionResult {
@@ -22,6 +22,6 @@ export async function runPytest(context: ProjectContext, options: { timeoutMs?: 
   await session.write("pytest.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  await session.finalize(status, { exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind, adapter: "pytest" });
+  await session.finalize(status, { exitCode: result.exitCode, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "pytest", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }), adapter: "pytest" });
   return { status, runId: session.runId, artifactDirectory: session.directory, exitCode: result.exitCode, failureKind };
 }

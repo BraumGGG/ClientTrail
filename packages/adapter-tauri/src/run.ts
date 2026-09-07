@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "@iarna/toml";
-import { EvidenceSession, runProcess } from "@client-test/core";
+import { EvidenceSession, runProcess, correctFailureKind } from "@client-test/core";
 import type { FailureKind, ProjectContext, RunStatus, TestContract } from "@client-test/core";
 
 export async function runTauriSuite(context: ProjectContext, options: { suite?: string; timeoutMs?: number; contract?: TestContract } = {}) {
@@ -30,7 +30,7 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   if (build.spawnError || build.timedOut || build.exitCode !== 0) {
     const status = build.spawnError ? "error" as const : "failed" as const;
     const failureKind = build.spawnError ? "environment" as const : build.timedOut ? "timeout" as const : "build" as const;
-    await session.finalize(status, { failureKind, phase: "build", exitCode: build.exitCode, spawnError: build.spawnError, command: { executable: buildExecutable, args: buildArgs } });
+    await session.finalize(status, { failureKind: correctFailureKind({ failureKind, phase: "build", spawnError: build.spawnError, timedOut: build.timedOut }), phase: "build", pid: build.pid, exitCode: build.exitCode, spawnError: build.spawnError, command: { executable: buildExecutable, args: buildArgs } });
     return { status, runId: session.runId, artifactDirectory: session.directory, failureKind, exitCode: build.exitCode };
   }
   const args = packageManager === "npm"
@@ -47,6 +47,6 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   await session.write("stderr.log", result.stderr);
   const status: RunStatus = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind: FailureKind | undefined = result.spawnError ? "environment" : result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion";
-  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, timedOut: result.timedOut, spawnError: result.spawnError, failureKind, command: { executable: packageManager, args, cwd: context.projectRoot } });
+  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "wdio", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }), command: { executable: packageManager, args, cwd: context.projectRoot } });
   return { status, runId: session.runId, artifactDirectory: join(session.directory), failureKind, exitCode: result.exitCode };
 }

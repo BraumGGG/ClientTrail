@@ -14,3 +14,4 @@ export * from "./diagnostics.js";
 export * from "./test-contract.js";
 export * from "./evidence-model.js";
 export * from "./advanced-models.js";
+export * from "./orchestration.js";

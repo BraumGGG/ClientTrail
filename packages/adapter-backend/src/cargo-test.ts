@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { EvidenceSession, runProcess } from "@client-test/core";
+import { EvidenceSession, runProcess, correctFailureKind } from "@client-test/core";
 import type { DetectionResult, ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export function detectCargoTest(context: ProjectContext): DetectionResult {
@@ -26,6 +26,6 @@ export async function runCargoTest(context: ProjectContext, options: { timeoutMs
   await session.write("cargo.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  await session.finalize(status, { exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind, adapter: "cargo-test", manifestPath });
+  await session.finalize(status, { exitCode: result.exitCode, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "cargo", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }), adapter: "cargo-test", manifestPath });
   return { status, runId: session.runId, artifactDirectory: session.directory, exitCode: result.exitCode, failureKind };
 }
