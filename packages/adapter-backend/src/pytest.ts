@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { EvidenceSession, runProcess } from "@client-test/core";
-import type { DetectionResult, ProjectContext, RunResult } from "@client-test/core";
+import type { DetectionResult, ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export function detectPytest(context: ProjectContext): DetectionResult {
   const evidence = ["pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg"].filter((file) => existsSync(join(context.projectRoot, file)));
@@ -15,8 +15,8 @@ export function detectPytest(context: ProjectContext): DetectionResult {
   return { adapterId: "pytest", detected: evidence.length > 0 || tests, confidence: evidence.length > 0 ? 1 : tests ? 0.6 : 0, evidence, capabilities: ["junit-xml", "fixtures", "hypothesis"] };
 }
 
-export async function runPytest(context: ProjectContext, options: { timeoutMs?: number } = {}): Promise<RunResult> {
-  const session = await EvidenceSession.create(context);
+export async function runPytest(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
+  const session = await EvidenceSession.create(context, options.contract);
   const result = await runProcess({ executable: process.platform === "win32" ? "python.exe" : "python3", args: ["-m", "pytest", "--junitxml", join(session.directory, "pytest.xml")], cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
   await session.write("pytest.stdout.log", result.stdout);
   await session.write("pytest.stderr.log", result.stderr);

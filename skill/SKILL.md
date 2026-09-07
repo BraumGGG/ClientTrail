@@ -248,12 +248,12 @@ budget = clamp(
 
 ```text
 intake -> doctor -> strategy -> capability-negotiation -> isolation-preflight
-       -> existing-run-or-readonly-observe -> evidence
+       -> test-contract -> existing-run-or-readonly-observe -> evidence
        -> deterministic-result -> diagnosis -> test-case-generation
 
 需要新增测试接线时：
 intake -> doctor -> isolated-worktree -> setup-plan -> confirmation -> setup
-       -> capability-negotiation -> isolation-preflight -> run -> evidence
+       -> capability-negotiation -> isolation-preflight -> run --contract test-contract.json -> evidence
        -> deterministic-result -> diagnosis -> test-case-generation
 ```
 
@@ -285,6 +285,16 @@ client-test doctor --project <project-root> --json
 ```
 
 对比用户声明和 `package.json`、`Cargo.toml`、Tauri 配置、锁文件的实际内容。发现不一致时报告警告，不要静默覆盖用户声明。
+
+## 1.1 测试契约
+
+在正式回归前生成或读取项目内的 `test-contract.json`，并冻结本次业务目标、前置条件、通过/失败/阻塞标准和证据策略。执行时使用：
+
+```text
+client-test run --project <project-root> --contract test-contract.json --json
+```
+
+CLI 会校验契约哈希，并把 `contractHash` 写入各套件的 `manifest.json`、`result.json` 和汇总输出。契约不存在时只能生成草案并等待确认，不能边执行边改变判定标准。
 
 需要详细接入字段时读取 [references/project-intake.md](references/project-intake.md)。
 
@@ -339,6 +349,8 @@ AI 生成的测试必须先保存为草稿，再运行验证；不要把一次�
 
 ```text
 client-test run --project <project-root> --json
+# 如已冻结契约：
+client-test run --project <project-root> --contract test-contract.json --json
 ```
 
 退出码含义：

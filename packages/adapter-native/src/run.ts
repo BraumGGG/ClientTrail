@@ -1,5 +1,5 @@
 import { EvidenceSession, parseCommand, runProcess } from "@client-test/core";
-import type { ProjectContext, RunResult } from "@client-test/core";
+import type { ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export type NativeOperation = "snapshot" | "find" | "invoke" | "wait";
 
@@ -20,8 +20,8 @@ export async function runNativeOperation(context: ProjectContext, operation: Nat
   return { ...result, command };
 }
 
-export async function runNativeSuite(context: ProjectContext, options: { timeoutMs?: number } = {}): Promise<RunResult> {
-  const session = await EvidenceSession.create(context);
+export async function runNativeSuite(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
+  const session = await EvidenceSession.create(context, options.contract);
   const configured = context.config.adapters.native;
   const command = configured && typeof configured === "object" && "command" in configured ? configured.command : undefined;
   if (!command) {

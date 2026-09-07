@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "@iarna/toml";
 import { EvidenceSession, runProcess } from "@client-test/core";
-import type { FailureKind, ProjectContext, RunStatus } from "@client-test/core";
+import type { FailureKind, ProjectContext, RunStatus, TestContract } from "@client-test/core";
 
-export async function runTauriSuite(context: ProjectContext, options: { suite?: string; timeoutMs?: number } = {}) {
-  const session = await EvidenceSession.create(context);
+export async function runTauriSuite(context: ProjectContext, options: { suite?: string; timeoutMs?: number; contract?: TestContract } = {}) {
+  const session = await EvidenceSession.create(context, options.contract);
   const packageManager = context.packageManager ?? "pnpm";
   const manifestPath = join(context.projectRoot, "src-tauri", "Cargo.toml");
   const cargo = existsSync(manifestPath) ? parse(readFileSync(manifestPath, "utf8")) as Record<string, any> : {};

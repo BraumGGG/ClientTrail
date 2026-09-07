@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { isPathInside } from "@client-test/core";
 import { generateWdioDraft } from "@client-test/core";
 import { runProcess } from "@client-test/core";
-import { diagnoseResult } from "@client-test/core";
+import { diagnoseResult, validateTestContract, type TestContract } from "@client-test/core";
 import { readFileSync } from "node:fs";
 
 export function createCli(): Command {
@@ -28,7 +28,7 @@ export function createCli(): Command {
     command.option("--project <path>", "project root", process.cwd());
     if (name === "doctor") command.option("--json", "emit machine-readable JSON");
     if (name === "setup") command.option("--dry-run", "show the setup plan without changing files").option("--yes", "apply the plan without prompting").option("--json", "emit machine-readable JSON");
-    if (name === "run") command.option("--suite <name>", "WDIO suite name").option("--all", "run all detected suites").option("--json", "emit machine-readable JSON").option("--timeout <ms>", "test timeout in milliseconds", "120000");
+    if (name === "run") command.option("--suite <name>", "WDIO suite name").option("--all", "run all detected suites").option("--json", "emit machine-readable JSON").option("--timeout <ms>", "test timeout in milliseconds", "120000").option("--contract <path>", "冻结的 test-contract.json（相对项目根目录）");
     if (name === "generate") command.option("--actions <path>", "recorded actions JSON file").option("--output <path>", "generated test file").option("--force", "overwrite an existing output file").option("--validate", "run TypeScript validation after generation").option("--json", "emit machine-readable JSON");
     if (name === "diagnose") command.option("--result <path>", "result.json path").option("--artifacts <path>", "artifact directory").option("--json", "emit machine-readable JSON");
     if (name === "evidence") command.option("--run <id>", "evidence run id").option("--file <name>", "file inside the run directory").option("--tail <lines>", "return only the last N lines").option("--json", "emit machine-readable JSON");
@@ -88,17 +88,23 @@ export function createCli(): Command {
         return;
       }
       if (name === "run") {
-        const options = command.opts<{ project: string; suite?: string; all?: boolean; json?: boolean; timeout: string }>();
+        const options = command.opts<{ project: string; suite?: string; all?: boolean; json?: boolean; timeout: string; contract?: string }>();
         const context = await createProjectContext(options.project);
+        let contract: TestContract | undefined;
+        if (options.contract) {
+          const contractPath = join(context.projectRoot, options.contract);
+          if (!isPathInside(context.projectRoot, contractPath)) throw new Error("contract path must remain inside the project root");
+          contract = validateTestContract(JSON.parse(await readFile(contractPath, "utf8")));
+        }
         const results = [];
         const tauriDetection = await tauriAdapter.detect(context);
-        if (tauriDetection.detected) results.push(await tauriAdapter.run(context, { suite: options.suite, timeoutMs: Number(options.timeout) }));
-        if (options.all && detectPytest(context).detected) results.push(await runPytest(context, { timeoutMs: Number(options.timeout) }));
-        if (options.all && detectCargoTest(context).detected) results.push(await runCargoTest(context, { timeoutMs: Number(options.timeout) }));
-        if (options.all && detectElectron(context).detected) results.push(await runElectronSuite(context, { timeoutMs: Number(options.timeout) }));
-        if (options.all && detectNative(context).detected) results.push(await runNativeSuite(context, { timeoutMs: Number(options.timeout) }));
+        if (tauriDetection.detected) results.push(await tauriAdapter.run(context, { suite: options.suite, timeoutMs: Number(options.timeout), contract }));
+        if (options.all && detectPytest(context).detected) results.push(await runPytest(context, { timeoutMs: Number(options.timeout), contract }));
+        if (options.all && detectCargoTest(context).detected) results.push(await runCargoTest(context, { timeoutMs: Number(options.timeout), contract }));
+        if (options.all && detectElectron(context).detected) results.push(await runElectronSuite(context, { timeoutMs: Number(options.timeout), contract }));
+        if (options.all && detectNative(context).detected) results.push(await runNativeSuite(context, { timeoutMs: Number(options.timeout), contract }));
         const aggregate = aggregateResults(results);
-        if (options.json) console.log(JSON.stringify({ ...aggregate, suites: results }));
+        if (options.json) console.log(JSON.stringify({ ...aggregate, contractHash: contract?.contractHash, suites: results }));
         else console.log(`${aggregate.status}: ${results.length} suite(s), failures: ${aggregate.failureKinds.join(", ") || "none"}`);
         if (aggregate.status === "error") process.exitCode = 2;
         else if (aggregate.status === "failed") process.exitCode = 3;

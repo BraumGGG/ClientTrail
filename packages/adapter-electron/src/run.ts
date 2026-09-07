@@ -1,9 +1,9 @@
 import { join } from "node:path";
 import { EvidenceSession, runProcess } from "@client-test/core";
-import type { ProjectContext, RunResult } from "@client-test/core";
+import type { ProjectContext, RunResult, TestContract } from "@client-test/core";
 
-export async function runElectronSuite(context: ProjectContext, options: { timeoutMs?: number } = {}): Promise<RunResult> {
-  const session = await EvidenceSession.create(context);
+export async function runElectronSuite(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
+  const session = await EvidenceSession.create(context, options.contract);
   const packageManager = context.packageManager ?? "pnpm";
   const args = packageManager === "npm" ? ["exec", "playwright", "--", "test"] : packageManager === "yarn" ? ["playwright", "test"] : packageManager === "bun" ? ["x", "playwright", "test"] : ["exec", "playwright", "test"];
   const executable = process.platform === "win32" ? `${packageManager}.cmd` : packageManager;

@@ -11,3 +11,6 @@ export * from "./application.js";
 export * from "./command.js";
 export * from "./recording.js";
 export * from "./diagnostics.js";
+export * from "./test-contract.js";
+export * from "./evidence-model.js";
+export * from "./advanced-models.js";

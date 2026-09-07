@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { EvidenceSession, runProcess } from "@client-test/core";
-import type { DetectionResult, ProjectContext, RunResult } from "@client-test/core";
+import type { DetectionResult, ProjectContext, RunResult, TestContract } from "@client-test/core";
 
 export function detectCargoTest(context: ProjectContext): DetectionResult {
   const manifest = join(context.projectRoot, "Cargo.toml");
@@ -10,8 +10,8 @@ export function detectCargoTest(context: ProjectContext): DetectionResult {
   return { adapterId: "cargo-test", detected: evidence.length > 0, confidence: evidence.length > 0 ? 1 : 0, evidence, capabilities: ["json-messages", "unit-tests", "integration-tests", "proptest"] };
 }
 
-export async function runCargoTest(context: ProjectContext, options: { timeoutMs?: number } = {}): Promise<RunResult> {
-  const session = await EvidenceSession.create(context);
+export async function runCargoTest(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
+  const session = await EvidenceSession.create(context, options.contract);
   const manifest = join(context.projectRoot, "Cargo.toml");
   const tauriManifest = join(context.projectRoot, "src-tauri", "Cargo.toml");
   const manifestPath = existsSync(manifest) ? manifest : existsSync(tauriManifest) ? tauriManifest : undefined;
