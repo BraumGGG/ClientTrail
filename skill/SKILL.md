@@ -92,12 +92,15 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 - WebDriver、Tauri driver、CDP、窗口焦点、磁盘诊断和 session cleanup 的 warning/error 要与业务断言分栏报告。清理失败不得覆盖原始业务根因。
 - 生命周期告警必须带阶段和 session 状态：session 已创建且业务断言完成后，`core.invoke` 探测超时、mock 清理失败、driver 停止失败等只能标记为 `adapter_warning`/`cleanup_warning`；session 尚未建立或启动失败时才可影响环境结论。清理逻辑应在 session 存在且仍有效时执行，避免对已删除 session 重复发请求。
 - 多个 spec 或 suite 会共享客户端、端口、用户数据目录或测试数据库时，默认串行执行；smoke、业务流程和后端套件应支持独立运行和独立结论。若实际运行出现多个 worker，必须证明每个 worker 的端口、用户数据目录、数据库和业务 `project_id` 均隔离，否则将结果标记为“通过但并发隔离风险未消除”，不能给出无条件的回归通过结论。报告实际 worker/session 数量，不以配置文件中的期望值代替事实。
+- 双实例或多实例测试必须额外记录每个实例的二进制路径、PID、WebDriver/CDP 端口、应用数据目录、临时目录、Cargo target/build 目录和启动时间。即使端口和数据目录不同，只要二进制资源、embedded WebDriver 资源、构建目录或全局临时资源仍共享，也不能宣称已完成并发隔离验证。实例 A 通过而实例 B 在启动阶段失败时，分别给出实例结论，并将整体标记为“并发能力未完成”，不得归因于业务断言。
 - 轮询异步状态时记录每次关键状态转换、版本、时间戳、最后响应和超时原因。重试必须有明确的错误白名单、次数/时间上限和每次重试证据，不能用无限重试掩盖产品问题。
 - 长时间异步任务、Provider 延迟和会话轮换必须由测试代码显式处理，不能由 Skill 通过固定 sleep 或“最后一次响应”猜测完成。测试应声明启动、进行中、成功、失败、取消、超时和会话失效状态；每次轮询记录 `run_id`/任务 ID、会话 ID、版本或事件游标。发生 session 轮换时必须重新建立会话并校验身份、项目和任务仍一致；轮换前后的证据必须能关联到同一业务任务。超过预算时标记为 `timeout` 或 `environment_blocked`，不得标记为通过。
 - 业务 API 调用应记录脱敏后的方法、路径、状态码、错误码、耗时、关联 ID 和关键实体 ID；原始 WebDriver 协议日志作为详细证据，不能替代结构化业务摘要。非 2xx 响应必须结合当前断言判定：预期的拒绝、幂等冲突或状态保护（例如已完成后再次修改返回 `409`）应记录为 `expected_business_response`，只有与断言预期不符时才记为业务/API 失败。
 - 测试开始时校验并记录正式项目根、隔离 worktree、应用数据目录、业务 `project_dir`/`provider_project_dir` 和实际 Cargo manifest；发现路径不一致时先报告环境问题。
 - “通过”还必须经过证据完整性门：除 `result.json.status=passed` 和退出码为 0 外，还要确认 `manifest.json` 已最终化、请求的 suite/spec 均有明确计数、每个业务目标至少有一个可定位证据，并且证据中的 `runId`、workspace、项目标识和关键实体引用一致。缺任一项时输出“测试框架通过，但证据不完整”，不能简化为无条件通过。
 - 恢复、终态审计、记忆/经验隔离和深度污染复验必须做关联校验：记录 baseline 快照、目标 `project_id`/`project_dir`、本次 `run_id`、workspace/data 目录，以及正向和负向查询的结果。跨项目污染复验至少要同时证明“目标项目可见”和“对照项目不可见”；只看到当前项目返回数据不能证明隔离成立。
+- 对 WDIO `onPrepare`、Tauri embedded WebDriver、CDP/Accessibility session 建立失败，必须优先归类为 `launch`、`environment` 或 `adapter`，不能使用 `assertion`。只有 session 已建立并进入测试步骤后，业务断言不满足时才可归类为 `assertion`。如果执行器原始 `failureKind` 与日志阶段矛盾，Skill 必须在报告中指出“原始分类不可信”，保留原始值并给出校正分类。
+- 当 embedded WebDriver 在指定端口超时未 ready 时，诊断必须核对：应用进程是否存活、端口是否被监听、插件初始化日志、资源文件是否存在、启动参数和环境变量是否传入、实例是否复用了同一二进制/target/临时目录，以及是否存在构建锁或并发启动竞争。不能只提示“注册插件”或直接重跑；应先给出最小复现和隔离修复建议。
 
 ### 后端套件命令发现
 
