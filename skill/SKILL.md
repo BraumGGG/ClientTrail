@@ -102,6 +102,113 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 - 对 WDIO `onPrepare`、Tauri embedded WebDriver、CDP/Accessibility session 建立失败，必须优先归类为 `launch`、`environment` 或 `adapter`，不能使用 `assertion`。只有 session 已建立并进入测试步骤后，业务断言不满足时才可归类为 `assertion`。如果执行器原始 `failureKind` 与日志阶段矛盾，Skill 必须在报告中指出“原始分类不可信”，保留原始值并给出校正分类。
 - 当 embedded WebDriver 在指定端口超时未 ready 时，诊断必须核对：应用进程是否存活、端口是否被监听、插件初始化日志、资源文件是否存在、启动参数和环境变量是否传入、实例是否复用了同一二进制/target/临时目录，以及是否存在构建锁或并发启动竞争。不能只提示“注册插件”或直接重跑；应先给出最小复现和隔离修复建议。
 
+### 高级测试能力契约
+
+以下能力属于通用测试工具的可选能力。Skill 必须先读取 adapter 的 capability 声明，再决定是否执行；不支持时返回 `capability_not_supported` 或 `not_configured`，不得伪造完成。
+
+#### 故障注入
+
+统一的故障注入动作使用以下语义：
+
+```text
+provider_disconnect
+worker_exit(stage)
+sidecar_restart
+session_expire
+pause_during_recovery
+recover
+```
+
+- `provider_disconnect`、`sidecar_restart`、`session_expire` 可由通用 adapter 提供；`worker_exit(stage)` 和 `pause_during_recovery` 通常需要项目测试入口。
+- 每次注入必须记录目标实例、注入阶段、开始/结束时间、关联任务或 `run_id`、恢复动作和最终状态。
+- 故障注入必须运行在 Debug/Test 或隔离环境；不得向生产服务、真实 Provider 或用户数据注入故障。
+- 外部 `taskkill`、端口阻断或进程操作只能标记为粗粒度注入，不得声称覆盖了 Worker 内部阶段。
+
+#### 多实例隔离预检
+
+并发测试开始前必须生成机器可读的 isolation preflight，逐实例比较：
+
+```text
+applicationId
+binaryPath
+binarySha256
+resourceDirectory
+webdriver/cdpPort
+sidecarPort
+appDataDirectory
+launcherControlDirectory
+databasePath
+temporaryDirectory
+cargoTargetDirectory
+```
+
+关键可写资源、端口、数据库和控制目录发生冲突时，必须在启动前返回 `isolation_blocked`。只读资源允许共享，但要明确标记 `shared_readonly`。预检通过不等于并发测试通过，还必须记录每个实例的 PID、session、实际监听端口和最终退出状态。
+
+#### 二进制和资源 provenance
+
+每个 run 的 `manifest.json` 应尽可能记录：
+
+- 客户端二进制路径、大小、SHA-256；
+- sidecar 路径和 SHA-256；
+- Tauri、WebDriver、测试配置 hash；
+- resource 目录路径、hash 和共享/隔离模式；
+- 实际 executable、args、cwd 和环境变量摘要；
+- 构建 commit、应用版本、adapter 版本和 package lock 标识。
+
+环境变量必须脱敏。无法计算 hash 时记录 `not-produced` 和原因，不能静默省略。两个实例的 provenance 不完整时，结果最多为“测试通过但构建独立性未验证”。
+
+#### 依赖图和阻塞传播
+
+测试用例或 suite 应声明前置依赖。前置失败后，依赖用例必须标记：
+
+```json
+{
+  "status": "blocked",
+  "blocked_by": "<root-case-id>",
+  "reason": "required run_id was not created"
+}
+```
+
+报告分别统计根因失败、独立失败、级联阻塞、跳过和未执行。不得把级联错误计为多个业务失败。测试框架无法自动跳过时，Skill 至少要根据时间线重分类，并停止继续发送无意义请求。
+
+#### Provider live/record/replay
+
+Provider 相关测试应声明：
+
+```text
+providerMode: live | record | replay
+```
+
+- `live` 用于最终 Provider 连通性、认证、真实延迟和最终验收；
+- `record` 在真实执行时生成脱敏、带 schema/version 的录制；
+- `replay` 用于状态机、恢复、隔离、UI 和重复回归，不能宣称真实 Provider 能力通过。
+
+录制数据必须脱敏并绑定项目、schema、版本和有效期。报告必须分别统计 live 和 replay 结果，不能混合成一个通过率。
+
+#### 动态预算
+
+长时间测试应根据历史延迟和用例规模生成预算，而不是要求用户手工猜 timeout：
+
+```text
+budget = clamp(
+  startupBudget
+  + specCount * specBudget
+  + providerP99Budget
+  + recoveryBudget
+  + safetyMargin,
+  minBudget,
+  maxBudget
+)
+```
+
+预算来源、P95/P99 样本数、最小值、最大值和实际使用值必须写入 manifest。预算不能无限增长；业务已经完成但外层 runner 超时，应标记为 `completed_but_runner_timeout`，不能直接判定为通过。
+
+#### 覆盖和负向断言
+
+- “完整 UI 覆盖”只有在存在视图/页面清单，并且每项都有访问、交互和断言证据时才能使用；否则写成“已验证的 UI 范围”。
+- 预期的 `404`、`409`、拒绝或隔离响应必须在用例中标记为 `expected_negative_case`，说明为什么该响应代表通过。
+- 稳定性测试必须报告迭代次数、持续时间、失败重试次数和 Provider 模式；少量重复执行只能称为“重复回归通过”，不能自动升级为“长时间稳定”。
+
 ### 后端套件命令发现
 
 `cargo`、`pytest` 等后端套件不能只根据目录名称推断命令。Skill 应先以只读方式收集候选入口：
@@ -129,15 +236,19 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 按以下顺序执行，不跳过项目诊断；setup 仅在隔离模式且获得确认后执行：
 
 ```text
-intake -> doctor -> strategy -> existing-run-or-readonly-observe
-       -> evidence -> deterministic-result -> diagnosis
+intake -> doctor -> strategy -> capability-negotiation -> isolation-preflight
+       -> existing-run-or-readonly-observe -> evidence
+       -> deterministic-result -> diagnosis -> test-case-generation
 
 需要新增测试接线时：
 intake -> doctor -> isolated-worktree -> setup-plan -> confirmation -> setup
-       -> run -> evidence -> deterministic-result -> diagnosis
+       -> capability-negotiation -> isolation-preflight -> run -> evidence
+       -> deterministic-result -> diagnosis -> test-case-generation
 ```
 
 每一步都必须保留机器可读结果；setup 变更前必须先展示 dry-run 计划并获得用户确认。
+
+高级能力的状态、预检字段和证据结构参考 [references/advanced-capabilities.md](references/advanced-capabilities.md)。
 
 ### Agent 自动编排
 
@@ -145,10 +256,12 @@ intake -> doctor -> isolated-worktree -> setup-plan -> confirmation -> setup
 2. 自动定位 ClientTrail CLI：优先使用当前仓库的 `pnpm client-test`；否则查找包含 `packages/cli/src/main.ts` 的 ClientTrail checkout，并执行 `pnpm --dir <clienttrail-root> client-test`。禁止假设系统存在全局 `client-test` 可执行文件；找不到 checkout 时报告安装位置，不伪造结果。
 3. 识别单仓库和多目录项目：先找到包含 `package.json`、`Cargo.toml`、`tauri.conf.json` 或 `pyproject.toml` 的实际子项目根目录。若 worktree 根是 Python/工作流仓库而 `desktop/` 是 Tauri 子项目，Tauri doctor/run 必须使用 `desktop/`，后端测试可继续使用 worktree 根。
 4. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
-5. 若项目已有测试接线，直接执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
-6. 若项目没有测试接线，报告“正式项目只读模式无法执行该套件”，然后必须触发“setup 决策门”，明确等待用户选择 1 或 2；不要直接结束且不要在正式项目执行 setup。
-7. 用户选择完整接入后，创建隔离副本或临时 worktree，在隔离目录执行 dry-run → 单独确认 → setup → run。
-8. 只读取隔离目录的 evidence，测试结论必须标注运行目录和“正式项目未修改”。
+5. 读取 adapter capability，明确故障注入、并发、Provider 模式、provenance、动态预算和后端命令哪些可用。
+6. 并发或多实例测试先执行 isolation preflight；返回 `isolation_blocked` 时不得启动客户端。
+7. 若项目已有测试接线，直接执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
+8. 若项目没有测试接线，报告“正式项目只读模式无法执行该套件”，然后必须触发“setup 决策门”，明确等待用户选择 1 或 2；不要直接结束且不要在正式项目执行 setup。
+9. 用户选择完整接入后，创建隔离副本或临时 worktree，在隔离目录执行 dry-run → 单独确认 → setup → run。
+10. 只读取隔离目录的 evidence，测试结论必须标注运行目录和“正式项目未修改”。
 
 用户只要求“测试一下”时，默认执行 doctor。已有测试能力时直接 run → evidence；缺少测试接入时只报告阻塞，不执行 setup。不要把内部命令列表当作用户前置工作。
 
@@ -294,6 +407,8 @@ client-test evidence --project <project-root> --run <run-id> --file stderr.log -
 6. setup 阶段已修改文件、安装的依赖和用户需要复核的风险；必须明确这些修改只存在于隔离目录，并写明“正式项目未修改”。
 7. 未验证的平台能力和下一步建议。
 8. 测试用例产物路径（如已生成），并说明每个用例对应的 `runId`、状态和证据引用。
+9. 能力矩阵：故障注入、并发隔离、provenance、依赖阻塞传播、Provider 模式和动态预算的状态。
+10. 若有多实例测试，附 isolation preflight、每实例 provenance 和 `isolation_blocked`/通过结论。
 
 不得把 AI 推断写成测试框架结果；不得编造通过率、截图、日志或业务状态。
 

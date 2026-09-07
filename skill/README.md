@@ -70,6 +70,18 @@ pnpm client-test evidence --project <project-root> --run <run-id> --file stderr.
 
 evidence 命令只读 `.client-test/artifacts`，不会上传或修改用户项目。
 
+## 高级测试能力
+
+在真实项目中使用故障矩阵、长时间稳定性或多实例并发测试时，Skill 会先检查：
+
+- 故障注入能力是否由当前 adapter 或项目测试入口提供；
+- 每个实例的端口、数据目录、数据库、二进制和资源是否隔离；
+- 客户端、sidecar、资源目录和配置的 provenance 是否完整；
+- Provider 使用的是 `live`、`record` 还是 `replay` 模式；
+- 前置失败是否会阻塞后续用例，以及当前测试预算是否足够。
+
+不支持的能力会标记为未配置或未验证，不会被自动伪造成通过。详细字段见 `references/advanced-capabilities.md`。
+
 ## 依赖和权限
 
 - Node.js 20+、pnpm 11+。
