@@ -1,8 +1,8 @@
 # Client Test
 
-AI-assisted deterministic testing for desktop clients.
+面向桌面客户端的 AI 辅助确定性测试工具。
 
-Client Test separates AI exploration from regression execution:
+Client Test 将 AI 探索与回归执行分离：
 
 ```text
 Skill -> MCP exploration -> recorded actions -> generated test
@@ -11,16 +11,16 @@ Skill -> MCP exploration -> recorded actions -> generated test
                           deterministic CLI + evidence
 ```
 
-## Supported adapters
+## 支持的适配器
 
-- Tauri 2: WebdriverIO Tauri Service, Windows/macOS test builds
-- Electron: Playwright test runner
-- Python: pytest
-- Rust: cargo test
-- Windows native: UI Automation command protocol
-- macOS native: Accessibility helper protocol
+- Tauri 2：WebdriverIO Tauri Service、Windows/macOS 测试构建
+- Electron：Playwright 测试运行器
+- Python：pytest
+- Rust：cargo test
+- Windows 原生：UI Automation 命令协议
+- macOS 原生：Accessibility helper 协议
 
-## Quick Start
+## 快速开始
 
 ```powershell
 pnpm install
@@ -28,14 +28,14 @@ pnpm exec tsx packages/cli/src/main.ts doctor --json
 pnpm exec tsx packages/cli/src/main.ts setup --dry-run --json
 ```
 
-After reviewing the setup plan:
+审阅 setup 计划后执行：
 
 ```powershell
 pnpm exec tsx packages/cli/src/main.ts setup --yes
 pnpm exec tsx packages/cli/src/main.ts run --all --json
 ```
 
-After building, expose the CLI as a local global command when another project or Agent needs to invoke it:
+构建后，如果其他项目或 Agent 需要调用 CLI，可以将它注册为本机全局命令：
 
 ```powershell
 pnpm build
@@ -43,22 +43,22 @@ pnpm link --global
 client-test doctor --project <project-root> --json
 ```
 
-Explore through MCP:
+通过 MCP 进行探索：
 
 ```powershell
 pnpm exec tsx packages/cli/src/main.ts mcp
 ```
 
-## Safety model
+## 安全模型
 
-- `setup` is dry-run by default.
-- Setup paths must remain inside the project root.
-- Test plugins are isolated behind a `client-test` Cargo feature.
-- Release builds must not enable test features or diagnostics.
-- Evidence redacts common tokens, cookies, authorization headers and secrets.
-- AI diagnostics cannot change the original test status.
+- `setup` 默认只生成 dry-run 计划。
+- setup 路径必须位于项目根目录内。
+- 测试插件必须通过 `client-test` Cargo feature 隔离。
+- Release 构建不得启用测试 feature 或诊断接口。
+- 证据会脱敏常见 Token、Cookie、Authorization header 和 Secret。
+- AI 诊断不能修改原始测试状态。
 
-## Development
+## 开发
 
 ```powershell
 pnpm exec tsc -b --pretty false
@@ -66,4 +66,4 @@ pnpm test
 pnpm test:contract
 ```
 
-The Tauri fixture is under `fixtures/tauri-basic`. Platform E2E requires a working Rust registry and desktop automation permissions.
+Tauri fixture 位于 `fixtures/tauri-basic`。平台 E2E 测试需要可用的 Rust registry 和桌面自动化权限。
