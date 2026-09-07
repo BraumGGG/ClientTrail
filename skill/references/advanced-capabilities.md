@@ -15,7 +15,7 @@
 
 ```json
 {
-  "action": "sidecar_restart",
+  "action": "external_dependency_restart",
   "target": "instance-a",
   "stage": "recovery",
   "runId": "...",
@@ -42,10 +42,10 @@
       "binarySha256": "...",
       "resourceDirectory": "...",
       "webdriverPort": 4451,
-      "sidecarPort": 0,
+      "externalDependencyPorts": [],
       "appDataDirectory": "...",
       "launcherControlDirectory": "...",
-      "databasePath": "...",
+      "persistentStorePaths": [],
       "cargoTargetDirectory": "..."
     }
   ],

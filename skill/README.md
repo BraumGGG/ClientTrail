@@ -76,7 +76,7 @@ evidence 命令只读 `.client-test/artifacts`，不会上传或修改用户项�
 
 - 故障注入能力是否由当前 adapter 或项目测试入口提供；
 - 每个实例的端口、数据目录、数据库、二进制和资源是否隔离；
-- 客户端、sidecar、资源目录和配置的 provenance 是否完整；
+- 客户端、外部依赖、资源目录和配置的 provenance 是否完整；
 - Provider 使用的是 `live`、`record` 还是 `replay` 模式；
 - 前置失败是否会阻塞后续用例，以及当前测试预算是否足够。
 

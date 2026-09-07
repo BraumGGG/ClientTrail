@@ -50,7 +50,7 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 
 | 判断 | 行为 |
 | --- | --- |
-| 项目已有可运行的 E2E、CDP/WebDriver、Accessibility、sidecar API 或测试命令 | 不使用 setup，直接执行已有测试和证据读取 |
+| 项目已有可运行的 E2E、CDP/WebDriver、Accessibility、辅助服务 API 或测试命令 | 不使用 setup，直接执行已有测试和证据读取 |
 | 只缺少路径、环境变量、启动参数或测试目标说明 | 不使用 setup，补充运行参数或报告缺失信息 |
 | 没有任何可连接的客户端自动化入口，且用户要求验证 WebView DOM、真实窗口交互或完整客户端链路 | 提议 setup，但只在隔离副本/worktree 中执行 |
 | 只读测试已能覆盖用户要求 | 不使用 setup；不得为了增加覆盖率擅自修改项目 |
@@ -91,20 +91,31 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 - 诊断工具必须按“实际 provider/adapter 是否使用”解释告警：如果当前使用 `embedded`、已有 CDP 或其他不依赖外部驱动的路径，则 `tauri-driver not found`、未安装的可选 helper 或自动安装提示只能标记为 `optional_tool_warning`，不得升级为环境失败。只有实际选中的 provider 在启动或执行时需要该工具且因此无法建立 session，才标记为 `environment_blocked`。
 - WebDriver、Tauri driver、CDP、窗口焦点、磁盘诊断和 session cleanup 的 warning/error 要与业务断言分栏报告。清理失败不得覆盖原始业务根因。
 - 生命周期告警必须带阶段和 session 状态：session 已创建且业务断言完成后，`core.invoke` 探测超时、mock 清理失败、driver 停止失败等只能标记为 `adapter_warning`/`cleanup_warning`；session 尚未建立或启动失败时才可影响环境结论。清理逻辑应在 session 存在且仍有效时执行，避免对已删除 session 重复发请求。
-- 多个 spec 或 suite 会共享客户端、端口、用户数据目录或测试数据库时，默认串行执行；smoke、业务流程和后端套件应支持独立运行和独立结论。若实际运行出现多个 worker，必须证明每个 worker 的端口、用户数据目录、数据库和业务 `project_id` 均隔离，否则将结果标记为“通过但并发隔离风险未消除”，不能给出无条件的回归通过结论。报告实际 worker/session 数量，不以配置文件中的期望值代替事实。
+- 多个 spec 或 suite 会共享客户端、端口、用户数据目录、持久化存储或外部依赖时，默认串行执行；smoke、业务流程和后端套件应支持独立运行和独立结论。若实际运行出现多个 worker，必须证明每个 worker 的业务作用域标识、端口、用户数据目录、存储和外部依赖连接均隔离，否则将结果标记为“通过但并发隔离风险未消除”，不能给出无条件的回归通过结论。报告实际 worker/session 数量，不以配置文件中的期望值代替事实。
 - 双实例或多实例测试必须额外记录每个实例的二进制路径、PID、WebDriver/CDP 端口、应用数据目录、临时目录、Cargo target/build 目录和启动时间。即使端口和数据目录不同，只要二进制资源、embedded WebDriver 资源、构建目录或全局临时资源仍共享，也不能宣称已完成并发隔离验证。实例 A 通过而实例 B 在启动阶段失败时，分别给出实例结论，并将整体标记为“并发能力未完成”，不得归因于业务断言。
 - 轮询异步状态时记录每次关键状态转换、版本、时间戳、最后响应和超时原因。重试必须有明确的错误白名单、次数/时间上限和每次重试证据，不能用无限重试掩盖产品问题。
 - 长时间异步任务、Provider 延迟和会话轮换必须由测试代码显式处理，不能由 Skill 通过固定 sleep 或“最后一次响应”猜测完成。测试应声明启动、进行中、成功、失败、取消、超时和会话失效状态；每次轮询记录 `run_id`/任务 ID、会话 ID、版本或事件游标。发生 session 轮换时必须重新建立会话并校验身份、项目和任务仍一致；轮换前后的证据必须能关联到同一业务任务。超过预算时标记为 `timeout` 或 `environment_blocked`，不得标记为通过。
 - 业务 API 调用应记录脱敏后的方法、路径、状态码、错误码、耗时、关联 ID 和关键实体 ID；原始 WebDriver 协议日志作为详细证据，不能替代结构化业务摘要。非 2xx 响应必须结合当前断言判定：预期的拒绝、幂等冲突或状态保护（例如已完成后再次修改返回 `409`）应记录为 `expected_business_response`，只有与断言预期不符时才记为业务/API 失败。
-- 测试开始时校验并记录正式项目根、隔离 worktree、应用数据目录、业务 `project_dir`/`provider_project_dir` 和实际 Cargo manifest；发现路径不一致时先报告环境问题。
+- 测试开始时校验并记录正式项目根、隔离 worktree、应用数据目录、业务作用域/租户/项目标识（如果项目有）、外部依赖作用域和实际构建 manifest；发现路径不一致时先报告环境问题。不存在某类标识时记录 `not_applicable`，不得要求所有项目都提供同名字段。
 - “通过”还必须经过证据完整性门：除 `result.json.status=passed` 和退出码为 0 外，还要确认 `manifest.json` 已最终化、请求的 suite/spec 均有明确计数、每个业务目标至少有一个可定位证据，并且证据中的 `runId`、workspace、项目标识和关键实体引用一致。缺任一项时输出“测试框架通过，但证据不完整”，不能简化为无条件通过。
-- 恢复、终态审计、记忆/经验隔离和深度污染复验必须做关联校验：记录 baseline 快照、目标 `project_id`/`project_dir`、本次 `run_id`、workspace/data 目录，以及正向和负向查询的结果。跨项目污染复验至少要同时证明“目标项目可见”和“对照项目不可见”；只看到当前项目返回数据不能证明隔离成立。
+- 恢复、终态审计、缓存/记忆/经验或其他持久化数据隔离复验必须做关联校验：记录 baseline 快照、业务作用域标识、本次 `run_id`、workspace/data 目录，以及正向和负向查询的结果。只有项目确实存在跨作用域数据时，才执行污染复验；至少同时证明“目标作用域可见”和“对照作用域不可见”。不存在该能力时标记 `not_applicable`，不能把项目专用检查强加给其他类型客户端。
 - 对 WDIO `onPrepare`、Tauri embedded WebDriver、CDP/Accessibility session 建立失败，必须优先归类为 `launch`、`environment` 或 `adapter`，不能使用 `assertion`。只有 session 已建立并进入测试步骤后，业务断言不满足时才可归类为 `assertion`。如果执行器原始 `failureKind` 与日志阶段矛盾，Skill 必须在报告中指出“原始分类不可信”，保留原始值并给出校正分类。
 - 当 embedded WebDriver 在指定端口超时未 ready 时，诊断必须核对：应用进程是否存活、端口是否被监听、插件初始化日志、资源文件是否存在、启动参数和环境变量是否传入、实例是否复用了同一二进制/target/临时目录，以及是否存在构建锁或并发启动竞争。不能只提示“注册插件”或直接重跑；应先给出最小复现和隔离修复建议。
 
 ### 高级测试能力契约
 
 以下能力属于通用测试工具的可选能力。Skill 必须先读取 adapter 的 capability 声明，再决定是否执行；不支持时返回 `capability_not_supported` 或 `not_configured`，不得伪造完成。
+
+能力字段必须通过 adapter 映射，不使用固定业务名称。推荐的通用映射包括：
+
+```text
+businessScopeId       -> 项目/租户/账号/工作区等业务作用域标识
+externalDependency    -> Provider、sidecar、服务进程或本地 helper
+persistentStore       -> 数据库、文件存储、缓存、索引或用户数据目录
+controlDirectory      -> launcher、锁、socket、pipe 或测试控制目录
+```
+
+某个项目没有 Provider、sidecar、数据库或多租户概念时，对应字段为 `not_applicable`，不影响其他能力执行。
 
 #### 故障注入
 
@@ -113,13 +124,13 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 ```text
 provider_disconnect
 worker_exit(stage)
-sidecar_restart
+external_dependency_restart
 session_expire
 pause_during_recovery
 recover
 ```
 
-- `provider_disconnect`、`sidecar_restart`、`session_expire` 可由通用 adapter 提供；`worker_exit(stage)` 和 `pause_during_recovery` 通常需要项目测试入口。
+- `provider_disconnect`、`external_dependency_restart`、`session_expire` 可由通用 adapter 提供；`worker_exit(stage)` 和 `pause_during_recovery` 通常需要项目测试入口。`sidecar_restart` 可以作为某些项目对 `external_dependency_restart` 的具体映射，但不是所有项目都必须实现。
 - 每次注入必须记录目标实例、注入阶段、开始/结束时间、关联任务或 `run_id`、恢复动作和最终状态。
 - 故障注入必须运行在 Debug/Test 或隔离环境；不得向生产服务、真实 Provider 或用户数据注入故障。
 - 外部 `taskkill`、端口阻断或进程操作只能标记为粗粒度注入，不得声称覆盖了 Worker 内部阶段。
@@ -134,10 +145,10 @@ binaryPath
 binarySha256
 resourceDirectory
 webdriver/cdpPort
-sidecarPort
+externalDependencyPorts
 appDataDirectory
 launcherControlDirectory
-databasePath
+persistentStorePaths
 temporaryDirectory
 cargoTargetDirectory
 ```
@@ -149,7 +160,7 @@ cargoTargetDirectory
 每个 run 的 `manifest.json` 应尽可能记录：
 
 - 客户端二进制路径、大小、SHA-256；
-- sidecar 路径和 SHA-256；
+- 外部依赖或辅助服务路径和 SHA-256（如果存在）；
 - Tauri、WebDriver、测试配置 hash；
 - resource 目录路径、hash 和共享/隔离模式；
 - 实际 executable、args、cwd 和环境变量摘要；
@@ -179,7 +190,7 @@ Provider 相关测试应声明：
 providerMode: live | record | replay
 ```
 
-- `live` 用于最终 Provider 连通性、认证、真实延迟和最终验收；
+- `live` 用于最终外部依赖连通性、认证、真实延迟和最终验收；
 - `record` 在真实执行时生成脱敏、带 schema/version 的录制；
 - `replay` 用于状态机、恢复、隔离、UI 和重复回归，不能宣称真实 Provider 能力通过。
 
@@ -288,7 +299,7 @@ client-test doctor --project <project-root> --json
 
 需要选择 Tauri 具体策略时读取 [references/tauri-strategy.md](references/tauri-strategy.md)。
 
-默认使用黑盒/外部观测模式：优先连接已有 CDP、WebView、Accessibility、sidecar API 和已有测试命令，不改源码、不注入插件。已存在测试接线时才使用白盒模式。新增白盒接线只能通过已确认的 setup 计划完成。
+默认使用黑盒/外部观测模式：优先连接已有 CDP、WebView、Accessibility、外部依赖 API 和已有测试命令，不改源码、不注入插件。已存在测试接线时才使用白盒模式。新增白盒接线只能通过已确认的 setup 计划完成。
 
 ## 3. 安装前确认
 
