@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "@iarna/toml";
-import { EvidenceSession, runProcess, correctFailureKind } from "@client-test/core";
+import { EvidenceSession, runProcess, correctFailureKind, classifyWdioFailure } from "@client-test/core";
 import type { FailureKind, ProjectContext, RunStatus, TestContract } from "@client-test/core";
 
 export async function runTauriSuite(context: ProjectContext, options: { suite?: string; timeoutMs?: number; contract?: TestContract } = {}) {
@@ -47,6 +47,8 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   await session.write("stderr.log", result.stderr);
   const status: RunStatus = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind: FailureKind | undefined = result.spawnError ? "environment" : result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion";
-  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "wdio", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }), command: { executable: packageManager, args, cwd: context.projectRoot } });
-  return { status, runId: session.runId, artifactDirectory: join(session.directory), failureKind, exitCode: result.exitCode };
+  const correctedFailureKind = classifyWdioFailure({ failureKind, stdout: result.stdout, stderr: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut });
+  const cleanupWarning = /Failed to clear mock store|sessionId is required|cleanup/i.test(result.stderr) ? "cleanup_warning" : undefined;
+  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctedFailureKind, cleanupWarning, command: { executable: packageManager, args, cwd: context.projectRoot } });
+  return { status, runId: session.runId, artifactDirectory: join(session.directory), failureKind: correctedFailureKind, exitCode: result.exitCode };
 }

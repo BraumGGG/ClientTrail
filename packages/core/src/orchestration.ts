@@ -32,12 +32,29 @@ export function selectFaultTarget(handles: InstanceControlHandle[], target: Part
   return matches[0];
 }
 
-export function correctFailureKind(input: { failureKind?: FailureKind; phase?: string; message?: string; spawnError?: string; timedOut?: boolean }): FailureKind | undefined {
+export function correctFailureKind(input: { failureKind?: FailureKind; phase?: string; message?: string; stdout?: string; spawnError?: string; timedOut?: boolean; sessionEstablished?: boolean; testExecutionStarted?: boolean; businessAssertionFailed?: boolean }): FailureKind | undefined {
   const text = `${input.phase ?? ""} ${input.message ?? ""} ${input.spawnError ?? ""}`.toLowerCase();
   if (input.timedOut) return "timeout";
+  // Once a WebDriver session and test execution exist, protocol stack traces are secondary evidence.
+  // They must not overwrite the business assertion/backend classification.
+  if (input.sessionEstablished || input.testExecutionStarted || input.businessAssertionFailed) return input.failureKind ?? (input.businessAssertionFailed ? "assertion" : undefined);
   if (input.phase && ["onprepare", "launch", "startup", "preflight"].some((p) => input.phase!.toLowerCase().includes(p))) return text.includes("driver") || text.includes("adapter") || text.includes("session") ? "adapter" : "launch";
   if (text.includes("spawn") || text.includes("web driver") || text.includes("webdriver") || text.includes("cdp")) return "adapter";
   return input.failureKind;
+}
+
+export function classifyWdioFailure(input: { failureKind?: FailureKind; stdout?: string; stderr?: string; timedOut?: boolean; spawnError?: string }): FailureKind | undefined {
+  const stdout = input.stdout ?? "";
+  const stderr = input.stderr ?? "";
+  const sessionEstablished = /Initiate new session|new session|session\/[\w-]+/i.test(stdout);
+  const testExecutionStarted = /RUNNING in|Execution of .* workers started|Spec Files:/i.test(stdout);
+  const businessAssertionFailed = /\b\d+ failing\b|AssertionError|expected .* to|actual .* expected/i.test(`${stdout}\n${stderr}`);
+  return correctFailureKind({ ...input, phase: sessionEstablished || testExecutionStarted ? "wdio-test" : "onPrepare", sessionEstablished, testExecutionStarted, businessAssertionFailed, message: stderr });
+}
+
+export function classifyBusinessResponse(input: { status: number; expectedStatuses?: number[]; blocked?: boolean }): "expected_business_response" | "unexpected_business_response" | "business_blocked" {
+  if (input.blocked) return "business_blocked";
+  return input.expectedStatuses?.includes(input.status) ? "expected_business_response" : "unexpected_business_response";
 }
 
 const minimums: Record<SuiteTier, { iterations: number; durationMs: number }> = {
