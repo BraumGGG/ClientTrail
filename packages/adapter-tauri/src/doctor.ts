@@ -1,9 +1,10 @@
-import { existsSync, accessSync, constants } from "node:fs";
+import { existsSync, accessSync, constants, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { DoctorCheck, DoctorReport, ProjectContext } from "@client-test/core";
 import { detectTauri } from "./detect.js";
+import { parse } from "@iarna/toml";
 
 const execFileAsync = promisify(execFile);
 
@@ -35,5 +36,18 @@ export async function runTauriDoctor(context: ProjectContext): Promise<DoctorRep
   let writable = true;
   try { accessSync(context.projectRoot, constants.W_OK); } catch { writable = false; }
   checks.push({ id: "artifact-directory", status: writable ? "pass" : "fail", message: writable ? `Project is writable; artifacts at ${artifacts}` : "Project root is not writable" });
-  return { schemaVersion: 1, projectRoot: context.projectRoot, platform: context.platform, checks, recommendedAdapters: detection.detected ? ["tauri-2"] : [] };
+  const cargoPath = join(context.projectRoot, "src-tauri", "Cargo.toml");
+  const cargoToml = existsSync(cargoPath) ? parse(readFileSync(cargoPath, "utf8")) as Record<string, unknown> : {};
+  const features = cargoToml.features as Record<string, unknown> | undefined;
+  const configured = Boolean(features && Object.prototype.hasOwnProperty.call(features, "client-test"));
+  const capabilities = {
+    webview: { status: detection.detected ? "available" : "capability_not_supported", source: "tauri-2 adapter", evidence: detection.evidence },
+    tauriCommand: { status: detection.detected ? "available" : "capability_not_supported", source: "tauri-2 adapter", evidence: detection.evidence },
+    embeddedWebDriver: { status: configured ? "available" : "not_configured", source: "Cargo feature/client-test", reason: configured ? undefined : "client-test feature or external WebView entrypoint not detected" },
+    faultInjection: { status: "not_configured", source: "adapter capability negotiation", reason: "no instance-level fault control handle configured" },
+    multiInstanceIsolation: { status: "not_configured", source: "isolation preflight", reason: "resource allocation has not been provided" },
+    provenance: { status: "partial", source: "run manifest", reason: "hashes and runtime handles are collected during execution when available" },
+    providerReplay: { status: "not_configured", source: "project adapter", reason: "no provider record/replay adapter configured" },
+  } as const;
+  return { schemaVersion: 1, projectRoot: context.projectRoot, platform: context.platform, checks, recommendedAdapters: detection.detected ? ["tauri-2"] : [], capabilities };
 }

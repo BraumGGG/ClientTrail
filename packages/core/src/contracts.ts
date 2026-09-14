@@ -66,7 +66,11 @@ export interface DoctorReport {
   platform: NodeJS.Platform;
   checks: DoctorCheck[];
   recommendedAdapters: string[];
+  capabilities?: Record<string, CapabilityObservation>;
 }
+
+export type CapabilityObservationStatus = "available" | "partial" | "not_configured" | "capability_not_supported" | "environment_blocked" | "isolation_blocked" | "not_verified";
+export interface CapabilityObservation { status: CapabilityObservationStatus; source: string; evidence?: string[]; reason?: string; }
 
 export interface TestAdapter {
   readonly id: string;

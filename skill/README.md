@@ -43,7 +43,7 @@ $clienttrail-desktop-testing
 使用 $clienttrail-desktop-testing 测试我当前打开的 Tauri 2 项目，验证登录、创建记录和退出登录流程。自动完成环境检查和测试配置；修改项目之前先把计划告诉我。
 ```
 
-Agent 会自动完成：识别项目根目录或实际子项目 → 定位 ClientTrail checkout → 检查环境 → 生成 setup 计划 → 请求一次确认 → 安装依赖和生成配置 → 运行测试 → 读取日志并给出优化建议。ClientTrail 不要求安装成全局命令，Agent 应从 checkout 目录通过 `pnpm client-test` 调用。
+Agent 会自动完成：识别项目根目录或实际子项目 → 定位 ClientTrail checkout → 检查环境 → 输出 capability 矩阵 → 优先运行已有测试 → 只有缺少入口时才提出隔离 setup 计划 → 读取日志并给出结论。ClientTrail 不要求安装成全局命令，Agent 应从 checkout 目录通过 `pnpm client-test` 调用。
 
 向 AI 提供被测项目路径和技术栈，例如：
 
@@ -69,6 +69,25 @@ pnpm client-test evidence --project <project-root> --run <run-id> --file stderr.
 ```
 
 evidence 命令只读 `.client-test/artifacts`，不会上传或修改用户项目。
+
+### 能力矩阵
+
+`doctor --json` 会返回 `capabilities` 字段，让 AI 和人都能看到当前项目到底能测什么：
+
+```text
+webview                  available
+embeddedWebDriver        not_configured
+faultInjection           not_configured
+multiInstanceIsolation   not_configured
+provenance               partial
+providerReplay           not_configured
+```
+
+能力矩阵不是测试通过结论。`available` 只表示入口已发现；真正执行后仍需检查 run evidence、业务断言和证据完整性。
+
+### setup 的安全边界
+
+正式项目默认只读。缺少测试入口时，Skill 先解释原因并生成 `setup --dry-run`；只有用户明确确认且目标是隔离副本/worktree，才执行 setup。setup 可能增加测试依赖、配置、测试草稿和 Debug/Test 接线，但不会把这些修改复制回正式项目。
 
 ## 高级测试能力
 
@@ -97,6 +116,17 @@ evidence 命令只读 `.client-test/artifacts`，不会上传或修改用户项�
 - Windows `winapp` helper 需要用户自行安装。
 - AI 探索得到的测试必须经过生成和验证，不能直接视为回归通过。
 - 真实桌面构建受本机 SDK、Rust、WebView2、权限和网络环境影响。
+
+## 常见工作流
+
+| 场景 | 入口 | 是否修改正式项目 |
+| --- | --- | --- |
+| 检查环境和能力 | `doctor --json` | 否 |
+| 执行已有回归 | `run --all --json` | 否 |
+| 查看最近证据 | `evidence --json` | 否 |
+| 失败诊断和复现包 | `diagnose --repro --json` | 否 |
+| 新增测试入口 | 隔离目录 `setup --dry-run` → 确认 → `setup --yes` | 否 |
+| AI 探索和录制 | `mcp` | 仅写入允许的探索/证据目录 |
 
 ## 测试
 

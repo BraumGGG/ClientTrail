@@ -9,4 +9,8 @@ export function printDoctor(report: DoctorReport, json: boolean): void {
   console.log(`Platform: ${report.platform}`);
   for (const check of report.checks) console.log(`[${check.status.toUpperCase()}] ${check.id}: ${check.message}`);
   console.log(`Recommended adapters: ${report.recommendedAdapters.join(", ") || "none"}`);
+  if (report.capabilities) {
+    console.log("Capabilities:");
+    for (const [id, capability] of Object.entries(report.capabilities)) console.log(`  ${id}: ${capability.status}${capability.reason ? ` (${capability.reason})` : ""}`);
+  }
 }
