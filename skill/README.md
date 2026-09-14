@@ -1,78 +1,106 @@
 # ClientTrail Desktop Testing Skill
 
-ClientTrail Desktop Testing 是一个可被 AI 直接调用的桌面客户端测试 Skill，面向 Tauri 2、Electron、Windows 原生 UI 和 macOS Accessibility UI。
+ClientTrail Desktop Testing 是一个可被 AI Agent 直接调用的桌面客户端确定性测试 Skill，面向 Tauri 2、Electron、Windows 原生 UI 和 macOS Accessibility UI。
 
-## 解决的问题
+## 立即使用
 
-它把 AI 探索与确定性回归分开：AI 可以探索、录制、生成测试和诊断失败；真正的回归由 WebdriverIO、Playwright、pytest、cargo test 或 Accessibility 适配器执行，不依赖 OCR 和截图猜测。
-
-## 适用范围
-
-- Tauri 2 桌面项目，优先支持。
-- Electron 桌面项目。
-- Windows UI Automation 和 macOS Accessibility 项目。
-- 可选的 Python/Rust 后端规则测试。
-
-不支持移动端，也不把 MCP 作为回归测试的必经链路。
-
-## 安装
-
-### Codex
-
-将本目录复制或链接到 Codex Skill 目录：
-
-```powershell
-Copy-Item -Recurse skill "$env:USERPROFILE\\.codex\\skills\\clienttrail-desktop-testing"
-```
-
-也可以在 ClientTrail 仓库根目录直接显式调用：
+安装阶段只需将本 `skill/` 目录注册到所使用的 Agent Skills 目录，不需要提前关联任何被测项目。请完整保留：
 
 ```text
-$clienttrail-desktop-testing
+SKILL.md
+references/
+agents/
+LICENSE
+NOTICE
 ```
 
-### Claude Code 或其他 Agent
-
-将 `skill/SKILL.md` 所在目录注册为 Agent Skills 目录，并保留 `references/` 和 `agents/` 子目录。
-
-## 使用方式
-
-最简单的用法是直接告诉 AI 使用 Skill，并说明项目和测试目标，不需要手动运行 CLI：
+如果所用 Agent 支持从 GitHub 安装 Skill，可以直接告诉它：
 
 ```text
-使用 $clienttrail-desktop-testing 测试我当前打开的 Tauri 2 项目，验证登录、创建记录和退出登录流程。自动完成环境检查和测试配置；修改项目之前先把计划告诉我。
+请安装 GitHub 仓库 https://github.com/BraumGGG/ClientTrail 中的
+clienttrail-desktop-testing Skill，并在本机完成 ClientTrail CLI
+的依赖安装和构建。现在不要测试或修改任何业务项目。
 ```
 
-Agent 会自动完成：识别项目根目录或实际子项目 → 定位 ClientTrail checkout → 检查环境 → 输出 capability 矩阵 → 优先运行已有测试 → 只有缺少入口时才提出隔离 setup 计划 → 读取日志并给出结论。ClientTrail 不要求安装成全局命令，Agent 应从 checkout 目录通过 `pnpm client-test` 调用。
-
-向 AI 提供被测项目路径和技术栈，例如：
+安装完成后，打开或切换到被测项目，直接描述测试目标：
 
 ```text
-使用 $clienttrail-desktop-testing 测试 D:\\Projects\\MyTauriApp，这是一个 Tauri 2 项目。先检查环境，再生成 setup 计划；我确认后再安装依赖并运行回归测试。
+使用 $clienttrail-desktop-testing 测试当前 Tauri 2 项目。
+测试目标：验证登录、创建任务、暂停恢复和退出登录。
+约束：正式项目保持只读；如果缺少测试入口，先给出 setup dry-run，
+说明其作用和影响，并等待我确认。
 ```
 
-Skill 会调用 ClientTrail CLI：
+如果 Agent 不使用 `$skill-name` 语法，直接说“使用 `clienttrail-desktop-testing` Skill”即可。
 
-```powershell
-pnpm client-test doctor --project <project-root> --json
-pnpm client-test setup --project <project-root> --dry-run --json
-pnpm client-test run --project <project-root> --json
-pnpm client-test evidence --project <project-root> --json
+用户不需要手动填写 ClientTrail 路径或拼接 CLI 命令。Agent 应自动识别项目、定位 CLI、检查 capability、运行已有测试、读取 evidence 并解释结果。
+
+## 产品无关
+
+ClientTrail 不限定特定 AI 产品。只要运行环境能够：
+
+- 加载 Agent Skill 或等效指令包；
+- 在本机执行 Node.js CLI；
+- 按需连接 MCP；
+- 访问被测项目和本地测试环境；
+
+就可以使用 ClientTrail。不同 Agent 产品的 Skill 安装目录和调用语法可能不同，但测试边界和执行模型保持一致。
+
+## 核心价值
+
+ClientTrail 将 AI 对业务目标的理解，与确定性测试框架的执行能力结合起来：
+
+```text
+自然语言测试目标
+-> 项目与 capability 识别
+-> 测试契约
+-> Playwright / WebdriverIO / Accessibility / pytest / cargo test
+-> DOM / API / 事件 / 状态 / 持久化证据
+-> 可解释结论、标准测试用例和失败复现包
 ```
 
-测试完成后可以让 AI 读取临时日志：
+它优先使用 DOM、WebView/CDP、IPC、Accessibility、API、SSE 和持久化状态，不把截图、OCR 或坐标点击作为默认测试方式。
 
-```powershell
-pnpm client-test evidence --project <project-root> --json
-pnpm client-test evidence --project <project-root> --run <run-id> --file result.json --json
-pnpm client-test evidence --project <project-root> --run <run-id> --file stderr.log --tail 200
-```
+## 与其他测试方式的区别
 
-evidence 命令只读 `.client-test/artifacts`，不会上传或修改用户项目。
+| 测试方式 | 主要能力 | ClientTrail 补充的部分 |
+| --- | --- | --- |
+| Computer Use、截图、OCR | 无结构化入口时操作窗口 | 优先寻找更快速、准确的 DOM、WebView、API 和 Accessibility 入口 |
+| Playwright、WebdriverIO | 可靠执行 UI 自动化 | 自动选择策略、控制权限、归类失败、关联业务证据 |
+| pytest、cargo test | 验证后端状态机和规则 | 与真实客户端 UI、API、事件和持久化投影组合验证 |
+| 项目专用 E2E | 深度适配单一产品 | 用统一 adapter、契约、capability 和 evidence 模型跨项目复用 |
+| AI 探索与录制 | 发现流程并生成草稿 | 要求草稿经过确定性执行，不把探索结果直接算作通过 |
 
-### 能力矩阵
+ClientTrail 的核心不是重新实现上述工具，而是提供它们之间缺少的 **AI 测试编排与证据判定层**。
 
-`doctor --json` 会返回 `capabilities` 字段，让 AI 和人都能看到当前项目到底能测什么：
+## 自动工作流
+
+Agent 应自动完成：
+
+1. 从当前目录和用户描述识别被测项目与技术栈；
+2. 定位 ClientTrail checkout 和 CLI，不依赖全局 `client-test`；
+3. 运行只读 `doctor` 并输出 capability 矩阵；
+4. 优先使用项目已有的 E2E、CDP/WebDriver、Accessibility 或后端测试入口；
+5. 执行确定性测试并读取 `.client-test` evidence；
+6. 区分业务失败、环境阻塞、适配器问题和清理告警；
+7. 输出 `runId`、证据位置、结论、未覆盖项和标准测试用例。
+
+只有缺少必要测试入口时，才进入隔离 setup 决策流程。
+
+## setup 的安全边界
+
+正式项目默认只读。需要新增测试基础设施时：
+
+1. Agent 先解释缺少什么入口以及不执行 setup 的覆盖限制；
+2. 创建隔离副本或临时 worktree；
+3. 在隔离目录运行 `setup --dry-run --json`；
+4. 展示依赖、文件、命令和 `productionRisk`；
+5. 用户明确确认当前计划后才执行 setup；
+6. 所有修改只保留在隔离目录，不复制回正式项目。
+
+## Capability 矩阵
+
+`doctor --json` 会输出可观察的 capability 状态，例如：
 
 ```text
 webview                  available
@@ -83,62 +111,36 @@ provenance               partial
 providerReplay           not_configured
 ```
 
-能力矩阵不是测试通过结论。`available` 只表示入口已发现；真正执行后仍需检查 run evidence、业务断言和证据完整性。
+Capability 只表示能力入口状态，不代表业务测试已经通过。最终结论必须来自确定性执行和 evidence。
 
-### setup 的安全边界
+## Skill、CLI、MCP 和 Adapter
 
-正式项目默认只读。缺少测试入口时，Skill 先解释原因并生成 `setup --dry-run`；只有用户明确确认且目标是隔离副本/worktree，才执行 setup。setup 可能增加测试依赖、配置、测试草稿和 Debug/Test 接线，但不会把这些修改复制回正式项目。
+- Skill：理解目标、选择策略、控制权限和解释结果；
+- CLI：执行确定性回归并保存 evidence；
+- MCP：用于探索、录制和生成测试草稿；
+- Adapter：连接具体客户端和测试框架。
 
-## 高级测试能力
+## 支持范围
 
-在真实项目中使用故障矩阵、长时间稳定性或多实例并发测试时，Skill 会先检查：
+- Tauri 2：最高优先级，已有真实项目深度验证；
+- Electron：已有 adapter，等待更多社区项目验证；
+- Windows 原生：UI Automation 协议 adapter；
+- macOS 原生：Accessibility 协议 adapter，完整 helper 仍需验证；
+- Python：pytest；Rust：cargo test。
 
-- 故障注入能力是否由当前 adapter 或项目测试入口提供；
-- 每个实例的端口、数据目录、数据库、二进制和资源是否隔离；
-- 客户端、外部依赖、资源目录和配置的 provenance 是否完整；
-- Provider 使用的是 `live`、`record` 还是 `replay` 模式；
-- 前置失败是否会阻塞后续用例，以及当前测试预算是否足够。
+暂不支持移动端。欢迎社区贡献更多公开 fixture、adapter 和兼容性数据。
 
-不支持的能力会标记为未配置或未验证，不会被自动伪造成通过。详细字段见 `references/advanced-capabilities.md`。
+## 手动 CLI（可选）
 
-## 依赖和权限
-
-- Node.js 20+、pnpm 11+。
-- Tauri 项目需要 Rust stable、Windows/macOS 桌面构建工具。
-- Electron 项目需要可用的 Electron runtime 和 Playwright。
-- Windows 原生需要 UI Automation helper；macOS 原生需要 Accessibility 权限和 helper。
-- setup 和运行测试可能修改被测项目测试文件、配置和本地构建产物；执行前必须确认。
-- 默认不上传用户项目、原始日志或凭据；evidence 会脱敏常见 Token、Cookie、Authorization、Secret 和 Password。
-
-## 已知限制
-
-- macOS AX helper 目前是协议层，尚未提供完整系统 helper。
-- Windows `winapp` helper 需要用户自行安装。
-- AI 探索得到的测试必须经过生成和验证，不能直接视为回归通过。
-- 真实桌面构建受本机 SDK、Rust、WebView2、权限和网络环境影响。
-
-## 常见工作流
-
-| 场景 | 入口 | 是否修改正式项目 |
-| --- | --- | --- |
-| 检查环境和能力 | `doctor --json` | 否 |
-| 执行已有回归 | `run --all --json` | 否 |
-| 查看最近证据 | `evidence --json` | 否 |
-| 失败诊断和复现包 | `diagnose --repro --json` | 否 |
-| 新增测试入口 | 隔离目录 `setup --dry-run` → 确认 → `setup --yes` | 否 |
-| AI 探索和录制 | `mcp` | 仅写入允许的探索/证据目录 |
-
-## 测试
-
-在仓库根目录运行：
+普通用户不需要运行这些命令。开发 ClientTrail 或排查环境时可以使用：
 
 ```powershell
-pnpm typecheck
-pnpm test
-pnpm --dir fixtures/electron-basic test:e2e
-pnpm --dir fixtures/tauri-basic exec wdio run wdio.conf.ts --logLevel silent
+pnpm client-test doctor --project <project-root> --json
+pnpm client-test run --project <project-root> --all --json
+pnpm client-test evidence --project <project-root> --json
+pnpm client-test diagnose --project <project-root> --result <run-dir>\\result.json --repro --json
 ```
 
 ## 许可证和贡献
 
-本 Skill 使用 Apache License 2.0。单独分发 Skill 时，请一并保留本目录中的 `LICENSE` 和 `NOTICE`。
+本 Skill 使用 Apache License 2.0。单独分发时，请一并保留本目录中的 `LICENSE` 和 `NOTICE`。
