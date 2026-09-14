@@ -141,4 +141,4 @@ pnpm --dir fixtures/tauri-basic exec wdio run wdio.conf.ts --logLevel silent
 
 ## 许可证和贡献
 
-本 Skill 使用 MIT 许可证。贡献前请阅读仓库根目录的 `CONTRIBUTING.md` 和 `SECURITY.md`。
+本 Skill 使用 Apache License 2.0。单独分发 Skill 时，请一并保留本目录中的 `LICENSE` 和 `NOTICE`。

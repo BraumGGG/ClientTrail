@@ -2,6 +2,7 @@
   "name": "client-testing-skill",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "bin": {
     "client-test": "scripts/client-test.cjs"
   },

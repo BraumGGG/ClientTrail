@@ -110,4 +110,4 @@ Tauri fixture 位于 `fixtures/tauri-basic`。平台 E2E 测试需要 Rust regis
 
 ## 许可证和贡献
 
-本项目使用 MIT 许可证。贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。
+本项目使用 Apache License 2.0。贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。分发本项目或其衍生作品时，请一并保留 `LICENSE` 和 `NOTICE`。

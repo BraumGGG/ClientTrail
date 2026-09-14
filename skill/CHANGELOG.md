@@ -1,5 +1,10 @@
 # 更新日志
 
+## 未发布 - 2026-09-14
+
+- 项目许可证由 MIT 切换为 Apache License 2.0。
+- 增加仓库级和独立 Skill 分发所需的 `LICENSE` 与 `NOTICE`。
+
 ## 0.1.0 - 2026-09-05
 
 - 发布 ClientTrail Desktop Testing Skill 初始版本。
