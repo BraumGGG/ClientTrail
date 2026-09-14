@@ -38,19 +38,24 @@ export function createCli(): Command {
         const context = await createProjectContext(options.project);
         const report = await tauriAdapter.doctor(context);
         const backendDetections = [detectPytest(context), detectCargoTest(context)];
+        report.capabilities ??= {};
         for (const detection of backendDetections) {
+          const capabilityId = detection.adapterId === "pytest" ? "pytest" : "cargoTest";
+          report.capabilities[capabilityId] = { status: detection.detected ? "available" : "not_configured", source: `${detection.adapterId} detection`, evidence: detection.evidence, reason: detection.detected ? undefined : "test entrypoint not detected" };
           if (detection.detected) {
             report.recommendedAdapters.push(detection.adapterId);
             report.checks.push({ id: `${detection.adapterId}-project`, status: "pass", message: `${detection.adapterId} project detected`, details: detection.evidence });
           }
         }
         const electronDetection = detectElectron(context);
+        report.capabilities.electron = { status: electronDetection.detected ? (electronRuntimeAvailable(context) ? "available" : "environment_blocked") : "not_configured", source: "electron adapter detection", evidence: electronDetection.evidence, reason: electronDetection.detected && !electronRuntimeAvailable(context) ? "Electron runtime is missing" : electronDetection.detected ? undefined : "Electron dependency not detected" };
         if (electronDetection.detected) {
           report.recommendedAdapters.push(electronDetection.adapterId);
           report.checks.push({ id: "electron-project", status: "pass", message: "Electron project detected", details: electronDetection.evidence });
           report.checks.push({ id: "electron-runtime", status: electronRuntimeAvailable(context) ? "pass" : "fail", message: electronRuntimeAvailable(context) ? "Electron runtime available" : "Electron runtime missing; run the package postinstall" });
         }
         const nativeDetection = detectNative(context);
+        report.capabilities[nativeDetection.adapterId] = { status: nativeDetection.detected ? "available" : nativeDetection.adapterId === "unsupported" ? "capability_not_supported" : "not_configured", source: "native adapter detection", evidence: nativeDetection.evidence, reason: nativeDetection.detected ? undefined : nativeDetection.adapterId === "unsupported" ? "current platform is not supported" : "native automation command not configured" };
         if (nativeDetection.detected) {
           report.recommendedAdapters.push(nativeDetection.adapterId);
           report.checks.push({ id: `${nativeDetection.adapterId}-project`, status: "pass", message: `${nativeDetection.adapterId} automation configured`, details: nativeDetection.evidence });
