@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ObjectiveSummary } from "./objective-results.js";
 
 export const exitCodes = {
   success: 0,
@@ -35,6 +36,8 @@ export interface RunResult {
   runId?: string;
   artifactDirectory?: string;
   exitCode?: number | null;
+  objectiveSummary?: ObjectiveSummary;
+  evidenceWarnings?: string[];
 }
 
 export interface ProjectContext {
