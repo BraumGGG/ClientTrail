@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { FailureKind, ProjectContext, RunStatus, TestContract } from "./contracts.js";
@@ -89,8 +89,9 @@ export class EvidenceSession {
   }
 
   async finalize(status: RunStatus | "interrupted", details: Record<string, unknown> = {}): Promise<EvidenceFinalization> {
+    const loadedObjectives = await this.loadObjectiveEvents();
     const objectiveSummary = this.contract
-      ? summarizeObjectiveEvents(this.contract, this.objectiveEvents)
+      ? summarizeObjectiveEvents(this.contract, loadedObjectives.events)
       : undefined;
     const requiredFailed = objectiveSummary?.objectives.some((item) => item.required && item.state === "failed") ?? false;
     const requiredIncomplete = objectiveSummary?.objectives.some((item) => item.required && (item.state === "blocked" || item.state === "not_executed")) ?? false;
@@ -108,6 +109,7 @@ export class EvidenceSession {
       file.status === "empty" ? [`${name} is empty`]
         : file.status === "not-produced" ? [`${name} was not produced: ${file.reason}`]
           : []);
+    if (loadedObjectives.warning) evidenceWarnings.push(loadedObjectives.warning);
     const runtimeInstances = [...this.runtimeInstances.values()];
     const result = {
       schemaVersion: 1,
@@ -146,5 +148,32 @@ export class EvidenceSession {
   private async writeManifest(value: unknown): Promise<void> {
     const content = JSON.stringify(value, null, 2);
     await writeFile(join(this.directory, "manifest.json"), this.redact ? redactText(content) : content, "utf8");
+  }
+
+  private async loadObjectiveEvents(): Promise<{ events: ObjectiveEvent[]; warning?: string }> {
+    const name = "objective-events.json";
+    try {
+      const content = await readFile(join(this.directory, name), "utf8");
+      const bytes = Buffer.byteLength(content, "utf8");
+      this.files[name] = { status: bytes === 0 ? "empty" : "produced", bytes };
+      if (bytes === 0) return { events: [] };
+      const parsed = JSON.parse(content) as unknown;
+      if (!Array.isArray(parsed)) throw new Error("expected a JSON array");
+      const events = parsed.map((event) => objectiveEventSchema.parse(event) as ObjectiveEvent);
+      const matching = events.filter((event) => event.runId === this.runId);
+      const warning = matching.length === events.length
+        ? undefined
+        : `${name} contains events for a different runId`;
+      return { events: matching, warning };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        if (this.contract && this.objectiveEvents.length === 0) {
+          this.markNotProduced(name, "no objective events were recorded");
+        }
+        return { events: this.objectiveEvents };
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return { events: this.objectiveEvents, warning: `${name} is invalid: ${message}` };
+    }
   }
 }

@@ -226,6 +226,8 @@ client-test run --project <project-root> --json
 client-test run --project <project-root> --contract test-contract.json --json
 ```
 
+测试框架 hook 上报目标终态时，读取 `CLIENT_TEST_RUN_ID` 和 `CLIENT_TEST_ARTIFACT_DIR`，将同一 run 的结构化事件数组写入 `objective-events.json`；不得自行生成新的运行编号。
+
 退出码含义：
 
 - `0`：通过

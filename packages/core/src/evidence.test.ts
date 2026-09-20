@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -67,5 +66,31 @@ describe("evidence session", () => {
     await session.recordRuntimeInstance({ instanceId: "runner", pid: 1234, binaryPath: "node" });
     const finalized = await session.finalize("passed", { exitCode: 0 });
     expect(finalized.runtimeInstances).toEqual([{ instanceId: "runner", pid: 1234, binaryPath: "node" }]);
+  });
+
+  it("ingests objective events written by a child process", async () => {
+    const root = await mkdtemp(join(tmpdir(), "evidence-child-events-"));
+    const context = await createProjectContext(root);
+    const contract = validateTestContract({
+      contractVersion: 1,
+      objectives: [{ id: "launch", description: "launch", required: true }],
+      preconditions: [],
+      requiredCapabilities: [],
+      optionalDegradations: [],
+      passCriteria: [],
+      failCriteria: [],
+      blockedCriteria: [],
+    });
+    const session = await EvidenceSession.create(context, contract);
+    await writeFile(join(session.directory, "objective-events.json"), JSON.stringify([{
+      runId: session.runId,
+      objectiveId: "launch",
+      state: "passed",
+      at: "2026-09-20T00:00:00.000Z",
+    }]), "utf8");
+
+    const finalized = await session.finalize("passed", { exitCode: 0 });
+    expect(finalized.status).toBe("passed");
+    expect(finalized.objectiveSummary?.allRequiredPassed).toBe(true);
   });
 });
