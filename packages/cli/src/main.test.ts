@@ -7,4 +7,11 @@ describe("client-test CLI", () => {
       "doctor", "inspect", "setup", "run", "generate", "diagnose", "evidence", "mcp",
     ]);
   });
+
+  it("does not add a separate workflow or replay command", () => {
+    const names = createCli().commands.map((command) => command.name());
+    expect(names).not.toContain("workflow");
+    expect(names).not.toContain("replay");
+    expect(names).not.toContain("fault-matrix");
+  });
 });

@@ -176,6 +176,8 @@ pnpm client-test evidence --project <被测项目目录> --json
 pnpm client-test diagnose --project <被测项目目录> --result <run目录>\\result.json --repro --json
 ```
 
+每次 `client-test run` 只生成一个 `runId`。当提供测试契约时，required objective 必须全部获得终态；执行器退出码为 0 但目标或必需 evidence 缺失时，结果会标记为 `evidence_incomplete`，不会报告为无条件通过。
+
 如果项目缺少测试入口，只能在隔离目录中执行：
 
 ```powershell
