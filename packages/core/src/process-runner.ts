@@ -15,7 +15,12 @@ export interface ProcessResult {
 export function runProcess(spec: CommandSpec, options: { timeoutMs?: number; redact?: boolean } = {}): Promise<ProcessResult> {
   const { timeoutMs = 120_000, redact = true } = options;
   return new Promise((resolve) => {
-    const child = crossSpawn(spec.executable, spec.args, { cwd: spec.cwd, windowsHide: true, shell: false });
+    const child = crossSpawn(spec.executable, spec.args, {
+      cwd: spec.cwd,
+      env: spec.env ? { ...process.env, ...spec.env } : process.env,
+      windowsHide: true,
+      shell: false,
+    });
     let stdout = "";
     let stderr = "";
     let timedOut = false;

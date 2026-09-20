@@ -11,6 +11,7 @@ export const commandSpecSchema = z.object({
   executable: z.string().min(1),
   args: z.array(z.string()),
   cwd: z.string().min(1),
+  env: z.record(z.string()).optional(),
 });
 
 export const setupPlanSchema = z.object({

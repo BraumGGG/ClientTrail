@@ -25,4 +25,15 @@ describe("process runner", () => {
     expect(result.spawnError).toBeTruthy();
     expect(result.stderr).toContain("client-test-command-that-does-not-exist");
   });
+
+  it("merges explicit environment variables into the child process", async () => {
+    const result = await runProcess({
+      executable: process.execPath,
+      args: ["-e", "process.stdout.write(process.env.CLIENT_TEST_RUN_ID || '')"],
+      cwd: process.cwd(),
+      env: { CLIENT_TEST_RUN_ID: "run-123" },
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("run-123");
+  });
 });
