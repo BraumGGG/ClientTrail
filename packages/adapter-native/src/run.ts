@@ -25,14 +25,33 @@ export async function runNativeSuite(context: ProjectContext, options: { timeout
   const configured = context.config.adapters.native;
   const command = configured && typeof configured === "object" && "command" in configured ? configured.command : undefined;
   if (!command) {
-    await session.finalize("error", { adapter: "native", failureKind: "environment", message: "No native automation command configured" });
-    return { status: "error", failureKind: "environment", runId: session.runId, artifactDirectory: session.directory };
+    session.markNotProduced("native.stdout.log", "no native automation command configured");
+    session.markNotProduced("native.stderr.log", "no native automation command configured");
+    const finalized = await session.finalize("error", { adapter: "native", failureKind: "environment", message: "No native automation command configured" });
+    return {
+      status: finalized.status === "interrupted" ? "error" : finalized.status,
+      failureKind: finalized.failureKind,
+      runId: session.runId,
+      artifactDirectory: session.directory,
+      objectiveSummary: finalized.objectiveSummary,
+      evidenceWarnings: finalized.evidenceWarnings,
+    };
   }
-  const result = await runProcess(parseCommand(command, context.projectRoot), { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
+  const commandSpec = parseCommand(command, context.projectRoot);
+  const result = await runProcess({ ...commandSpec, env: session.childEnvironment() }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
+  await session.recordRuntimeInstance({ instanceId: "adapter-runner", binaryPath: commandSpec.executable, pid: result.pid });
   await session.write("native.stdout.log", result.stdout);
   await session.write("native.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  await session.finalize(status, { adapter: "native", pid: result.pid, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "native", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }) });
-  return { status, failureKind, runId: session.runId, artifactDirectory: session.directory, exitCode: result.exitCode };
+  const finalized = await session.finalize(status, { adapter: "native", pid: result.pid, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "native", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }) });
+  return {
+    status: finalized.status === "interrupted" ? "error" : finalized.status,
+    failureKind: finalized.failureKind ?? failureKind,
+    runId: session.runId,
+    artifactDirectory: session.directory,
+    exitCode: result.exitCode,
+    objectiveSummary: finalized.objectiveSummary,
+    evidenceWarnings: finalized.evidenceWarnings,
+  };
 }

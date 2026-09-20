@@ -19,12 +19,24 @@ describe("Tauri runner", () => {
     const root = await mkdtemp(join(tmpdir(), "tauri-run-preflight-"));
     await mkdir(join(root, "src-tauri"), { recursive: true });
     await writeFile(join(root, "src-tauri", "Cargo.toml"), "[package]\nname=\"demo\"\n[dependencies]\ntauri=\"2\"\n");
-    const result = await runTauriSuite({
+    const context: ProjectContext = {
       projectRoot: root,
       platform: "win32",
       packageManager: "npm",
       files: [],
       config: { version: 1, project: { root: "." }, adapters: {}, artifacts: { directory: ".client-test/artifacts", redact: true } },
+    };
+    const result = await runTauriSuite(context, {
+      contract: {
+        contractVersion: 1,
+        objectives: [{ id: "launch", description: "launch", required: true }],
+        preconditions: [],
+        requiredCapabilities: [],
+        optionalDegradations: [],
+        passCriteria: [],
+        failCriteria: [],
+        blockedCriteria: [],
+      },
     });
     expect(result.status).toBe("error");
     expect(result.failureKind).toBe("environment");

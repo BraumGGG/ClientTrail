@@ -23,5 +23,9 @@ describe("backend adapters", () => {
     expect(result.status).toBe("passed");
     const evidence = JSON.parse(await readFile(join(result.artifactDirectory!, "result.json"), "utf8"));
     expect(evidence.manifestPath).toBe(join(root, "src-tauri", "Cargo.toml"));
+    expect(evidence.runId).toBe(result.runId);
+    expect(evidence.runtimeInstances).toEqual([
+      expect.objectContaining({ instanceId: "adapter-runner", pid: expect.any(Number) }),
+    ]);
   }, 30_000);
 });

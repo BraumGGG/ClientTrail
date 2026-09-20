@@ -12,9 +12,20 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   const features = cargo.features as Record<string, unknown> | undefined;
   if (!features || !("client-test" in features)) {
     const message = "Tauri project does not define the client-test feature; run setup in an isolated worktree or use an existing external WebView/CDP test entrypoint";
+    session.markNotProduced("build.stdout.log", "client-test feature is not configured");
+    session.markNotProduced("build.stderr.log", "client-test feature is not configured");
+    session.markNotProduced("stdout.log", "WDIO was not started");
+    session.markNotProduced("stderr.log", "WDIO was not started");
     await session.write("setup-required.txt", message);
-    await session.finalize("error", { adapter: "tauri-2", failureKind: "environment", phase: "preflight", message, manifestPath });
-    return { status: "error" as const, runId: session.runId, artifactDirectory: session.directory, failureKind: "environment" as const };
+    const finalized = await session.finalize("error", { adapter: "tauri-2", failureKind: "environment", phase: "preflight", message, manifestPath });
+    return {
+      status: finalized.status === "interrupted" ? "error" as const : finalized.status,
+      failureKind: finalized.failureKind,
+      runId: session.runId,
+      artifactDirectory: session.directory,
+      objectiveSummary: finalized.objectiveSummary,
+      evidenceWarnings: finalized.evidenceWarnings,
+    };
   }
   const buildArgs = packageManager === "npm"
     ? ["exec", "tauri", "--", "build", "--debug", "--no-bundle", "--features", "client-test"]
@@ -24,14 +35,25 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
         ? ["x", "tauri", "build", "--debug", "--no-bundle", "--features", "client-test"]
         : ["exec", "tauri", "build", "--debug", "--no-bundle", "--features", "client-test"];
   const buildExecutable = process.platform === "win32" && ["pnpm", "npm", "yarn", "bun"].includes(packageManager) ? `${packageManager}.cmd` : packageManager;
-  const build = await runProcess({ executable: buildExecutable, args: buildArgs, cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
+  const build = await runProcess({ executable: buildExecutable, args: buildArgs, cwd: context.projectRoot, env: session.childEnvironment() }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
+  await session.recordRuntimeInstance({ instanceId: "adapter-runner", binaryPath: buildExecutable, pid: build.pid });
   await session.write("build.stdout.log", build.stdout);
   await session.write("build.stderr.log", build.stderr);
   if (build.spawnError || build.timedOut || build.exitCode !== 0) {
     const status = build.spawnError ? "error" as const : "failed" as const;
     const failureKind = build.spawnError ? "environment" as const : build.timedOut ? "timeout" as const : "build" as const;
-    await session.finalize(status, { failureKind: correctFailureKind({ failureKind, phase: "build", spawnError: build.spawnError, timedOut: build.timedOut }), phase: "build", pid: build.pid, exitCode: build.exitCode, spawnError: build.spawnError, command: { executable: buildExecutable, args: buildArgs } });
-    return { status, runId: session.runId, artifactDirectory: session.directory, failureKind, exitCode: build.exitCode };
+    session.markNotProduced("stdout.log", "WDIO was not started because the build failed");
+    session.markNotProduced("stderr.log", "WDIO was not started because the build failed");
+    const finalized = await session.finalize(status, { failureKind: correctFailureKind({ failureKind, phase: "build", spawnError: build.spawnError, timedOut: build.timedOut }), phase: "build", pid: build.pid, exitCode: build.exitCode, spawnError: build.spawnError, command: { executable: buildExecutable, args: buildArgs } });
+    return {
+      status: finalized.status === "interrupted" ? "error" as const : finalized.status,
+      failureKind: finalized.failureKind ?? failureKind,
+      runId: session.runId,
+      artifactDirectory: session.directory,
+      exitCode: build.exitCode,
+      objectiveSummary: finalized.objectiveSummary,
+      evidenceWarnings: finalized.evidenceWarnings,
+    };
   }
   const args = packageManager === "npm"
     ? ["exec", "wdio", "--", "run", "wdio.conf.ts"]
@@ -42,13 +64,22 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
         : ["exec", "wdio", "run", "wdio.conf.ts"];
   if (options.suite) args.push("--suite", options.suite);
   const executable = buildExecutable;
-  const result = await runProcess({ executable, args, cwd: context.projectRoot }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
+  const result = await runProcess({ executable, args, cwd: context.projectRoot, env: session.childEnvironment() }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
+  await session.recordRuntimeInstance({ instanceId: "adapter-runner", binaryPath: executable, pid: result.pid });
   await session.write("stdout.log", result.stdout);
   await session.write("stderr.log", result.stderr);
   const status: RunStatus = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind: FailureKind | undefined = result.spawnError ? "environment" : result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion";
   const correctedFailureKind = classifyWdioFailure({ failureKind, stdout: result.stdout, stderr: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut });
   const cleanupWarning = /Failed to clear mock store|sessionId is required|cleanup/i.test(result.stderr) ? "cleanup_warning" : undefined;
-  await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctedFailureKind, cleanupWarning, command: { executable: packageManager, args, cwd: context.projectRoot } });
-  return { status, runId: session.runId, artifactDirectory: join(session.directory), failureKind: correctedFailureKind, exitCode: result.exitCode };
+  const finalized = await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctedFailureKind, cleanupWarning, command: { executable, args, cwd: context.projectRoot } });
+  return {
+    status: finalized.status === "interrupted" ? "error" as const : finalized.status,
+    failureKind: finalized.failureKind ?? correctedFailureKind,
+    runId: session.runId,
+    artifactDirectory: join(session.directory),
+    exitCode: result.exitCode,
+    objectiveSummary: finalized.objectiveSummary,
+    evidenceWarnings: finalized.evidenceWarnings,
+  };
 }

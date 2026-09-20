@@ -26,9 +26,36 @@ describe("native adapter", () => {
     });
 
     expect(result.status).toBe("error");
-    expect(result.failureKind).toBe("environment");
+    expect(result.failureKind).toBe("adapter");
     const evidence = JSON.parse(await readFile(join(result.artifactDirectory!, "result.json"), "utf8"));
     expect(evidence.status).toBe("error");
+    expect(evidence.failureKind).toBe(result.failureKind);
     expect(evidence.spawnError).toContain("client-test-command-that-does-not-exist");
+  });
+
+  it("propagates the evidence run id into the configured command", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "client-test-native-env-"));
+    const result = await runNativeSuite({
+      projectRoot,
+      platform: process.platform,
+      files: [],
+      config: {
+        version: 1,
+        project: { root: "." },
+        adapters: {
+          native: {
+            enabled: true,
+            command: {
+              executable: process.execPath,
+              args: ["-e", "process.stdout.write(process.env.CLIENT_TEST_RUN_ID || '')"],
+            },
+          },
+        },
+        artifacts: { directory: ".client-test/artifacts", redact: true },
+      },
+    });
+    expect(result.status).toBe("passed");
+    const stdout = await readFile(join(result.artifactDirectory!, "native.stdout.log"), "utf8");
+    expect(stdout).toBe(result.runId);
   });
 });
