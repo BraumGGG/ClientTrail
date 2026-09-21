@@ -178,6 +178,8 @@ pnpm client-test diagnose --project <被测项目目录> --result <run目录>\\r
 
 每次 `client-test run` 只生成一个 `runId`。当提供测试契约时，required objective 必须全部获得终态；执行器退出码为 0 但目标或必需 evidence 缺失时，结果会标记为 `evidence_incomplete`，不会报告为无条件通过。
 
+最终报告会把业务结论与运行告警分开列出，包括 required objective 计数、`cleanupWarning`、stderr warning，以及多实例预期事实与实际 provenance 的不一致。
+
 如果项目缺少测试入口，只能在隔离目录中执行：
 
 ```powershell

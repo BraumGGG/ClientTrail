@@ -22,4 +22,14 @@ describe("skill contract", () => {
     expect(skill).toContain("evidence_incomplete");
     expect(skill).toContain("不得用配置中的期望值冒充实际值");
   });
+
+  it("requires warning visibility and lightweight multi-instance consistency checks", () => {
+    expect(skill).toContain("cleanupWarning");
+    expect(skill).toContain("evidence_warning");
+    expect(skill).toContain("预期事实");
+    expect(skill).toContain("实际事实");
+    expect(skill).toContain("required objective 计数");
+    expect(skill).toContain("业务结论：");
+    expect(skill).toContain("事实一致性：");
+  });
 });

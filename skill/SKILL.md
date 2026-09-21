@@ -91,6 +91,8 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 - 业务失败、环境阻塞、后端/API 错误、定位器错误、测试代码异常和清理异常必须分开分类。不能仅根据进程退出码 `1` 统一标记为 `assertion`。
 - WebDriver、Tauri driver、CDP、窗口焦点、磁盘诊断和 session cleanup 的 warning/error 要与业务断言分栏报告。清理失败不得覆盖原始业务根因。
 - 多实例测试仍必须先验证端口和可写目录隔离，并报告每个实例的实际 PID、session、端口和数据目录；缺少事实时只能标记为未验证。
+- finalized 结果中的 `cleanupWarning`、stderr warning 和其他非致命告警必须在最终回答中单独列出；它们默认不改变业务 `passed/failed`，但不得被省略或写成“完全无告警”。
+- 多实例证据同时提供预期事实和实际 provenance 时，至少比对 instanceId、PID、端口、二进制路径和数据目录；不一致时标记为 `evidence_warning`，保留业务结论并明确“预期值/实际值”，不得静默选择一方。
 - 异步轮询和重试必须有明确上限与证据，不能用固定 sleep、无限重试或最后一次响应猜测完成。
 
 故障注入、Provider record/replay、完整 provenance、动态预算和复杂隔离预检不是默认流程。仅当用户明确要求且 adapter 声明支持时，读取 [references/advanced-capabilities.md](references/advanced-capabilities.md)；不支持时报告 `capability_not_supported` 或 `not_configured`，不得临时扩展普通回归流程。
@@ -305,9 +307,18 @@ client-test diagnose --project <project-root> --result <run-dir>\\result.json --
 3. 执行过的命令及退出码。
 4. 测试汇总：通过、失败、环境错误和未执行套件。
 5. `runId`、`artifactDirectory` 和关键证据文件。
-6. setup 阶段已修改文件、安装的依赖和用户需要复核的风险；必须明确这些修改只存在于隔离目录，并写明“正式项目未修改”。
-7. 未验证的平台能力和下一步建议。
-8. 测试用例产物路径（如已生成），并说明每个用例对应的 `runId`、状态和证据引用；若用户要求多实例或其他高级能力，再补充对应事实和结论。
+6. 业务结论与运行告警分开：必须写出状态、required objective 计数、`cleanupWarning`/stderr warning，以及预期事实与实际事实的不一致。
+7. setup 阶段已修改文件、安装的依赖和用户需要复核的风险；必须明确这些修改只存在于隔离目录，并写明“正式项目未修改”。
+8. 未验证的平台能力和下一步建议。
+9. 测试用例产物路径（如已生成），并说明每个用例对应的 `runId`、状态和证据引用；若用户要求多实例或其他高级能力，再补充对应事实和结论。
+
+最小结果摘要应至少能读成三行：
+
+```text
+业务结论：<passed/failed/blocked>，required objective <passed>/<total>，退出码=<code>
+运行告警：<cleanupWarning、stderr warning 或“无”>
+事实一致性：<无差异，或列出预期值 -> 实际值>
+```
 
 不得把 AI 推断写成测试框架结果；不得编造通过率、截图、日志或业务状态。
 
