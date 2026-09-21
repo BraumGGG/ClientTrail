@@ -216,6 +216,10 @@ pnpm test
 pnpm test:contract
 ```
 
+## 更新日志
+
+每次实质更新都会在 [CHANGELOG.md](CHANGELOG.md) 中说明新增、修改、修复和验证结果。Skill 独立分发内容另见 [skill/CHANGELOG.md](skill/CHANGELOG.md)。
+
 ## 许可证和贡献
 
 本项目使用 Apache License 2.0。贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [SECURITY.md](SECURITY.md)。分发本项目或其衍生作品时，请一并保留 `LICENSE` 和 `NOTICE`。
