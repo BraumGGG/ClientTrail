@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TestContract } from "./contracts.js";
-import { objectiveEventSchema, summarizeObjectiveEvents } from "./objective-results.js";
+import { objectiveEventSchema, reconcileObjectiveEvents, summarizeObjectiveEvents } from "./objective-results.js";
 
 const contract: TestContract = {
   contractVersion: 1,
@@ -47,5 +47,29 @@ describe("objective results", () => {
       state: "blocked",
       at: "2026-09-20T00:00:00.000Z",
     })).toThrow();
+  });
+
+  it("turns unproven assertion failures into one timeout root and blocked dependents", () => {
+    const reconciled = reconcileObjectiveEvents([
+      { runId: "run-1", objectiveId: "launch", state: "failed", failureKind: "assertion", message: "业务断言失败", evidence: ["stdout.log", "stderr.log", "timeline.json"], at: "2026-09-21T00:00:01.000Z" },
+      { runId: "run-1", objectiveId: "share", state: "failed", failureKind: "assertion", message: "业务断言失败", evidence: ["stdout.log", "stderr.log"], at: "2026-09-21T00:00:02.000Z" },
+    ], { runFailureKind: "timeout", runnerTerminated: true });
+
+    expect(reconciled.events).toEqual([
+      expect.objectContaining({ objectiveId: "launch", state: "failed", failureKind: "timeout" }),
+      expect.objectContaining({ objectiveId: "share", state: "blocked", blockedBy: "launch" }),
+    ]);
+    expect(reconciled.warnings).toContain("objective failure classifications were corrected from unproven assertions using run-level timeout");
+  });
+
+  it("keeps assertions that carry a business phase or evidence", () => {
+    const events = [
+      { runId: "run-1", objectiveId: "launch", state: "failed" as const, failureKind: "assertion" as const, phase: "business-assertion", at: "2026-09-21T00:00:01.000Z" },
+      { runId: "run-1", objectiveId: "share", state: "failed" as const, failureKind: "assertion" as const, evidence: ["timeline.json#share"], at: "2026-09-21T00:00:02.000Z" },
+    ];
+    const reconciled = reconcileObjectiveEvents(events, { runFailureKind: "timeout", runnerTerminated: true });
+
+    expect(reconciled.events).toEqual(events);
+    expect(reconciled.warnings).toEqual([]);
   });
 });

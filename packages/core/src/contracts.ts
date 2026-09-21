@@ -30,6 +30,15 @@ export type FailureKind =
   | "environment" | "build" | "launch" | "locator" | "timeout"
   | "assertion" | "backend" | "network" | "crash" | "security" | "adapter" | "evidence_incomplete" | "unknown";
 export type RunStatus = "pending" | "running" | "paused" | "waiting_human" | "recovering" | "passed" | "failed" | "timeout" | "cancelled" | "blocked" | "error";
+export interface RunnerFailureSummary {
+  firstFatalLine?: string;
+  affectedInstances: string[];
+  scriptExecutionTimedOut: boolean;
+  connectionRefused: boolean;
+  channelClosed: boolean;
+  runnerTimedOut: boolean;
+  signal?: string;
+}
 export interface RunResult {
   status: RunStatus;
   failureKind?: FailureKind;
@@ -38,6 +47,7 @@ export interface RunResult {
   exitCode?: number | null;
   objectiveSummary?: ObjectiveSummary;
   evidenceWarnings?: string[];
+  diagnosticSummary?: RunnerFailureSummary;
 }
 
 export interface ProjectContext {

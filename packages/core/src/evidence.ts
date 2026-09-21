@@ -1,10 +1,11 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { FailureKind, ProjectContext, RunStatus, TestContract } from "./contracts.js";
+import type { FailureKind, ProjectContext, RunnerFailureSummary, RunStatus, TestContract } from "./contracts.js";
 import type { StateTransition } from "./evidence-model.js";
 import {
   objectiveEventSchema,
+  reconcileObjectiveEvents,
   summarizeObjectiveEvents,
   type ObjectiveEvent,
   type ObjectiveEventInput,
@@ -25,6 +26,7 @@ export interface EvidenceFinalization {
   objectiveSummary?: ObjectiveSummary;
   evidenceWarnings: string[];
   runtimeInstances: RuntimeInstanceFacts[];
+  diagnosticSummary?: RunnerFailureSummary;
 }
 
 export class EvidenceSession {
@@ -90,14 +92,18 @@ export class EvidenceSession {
 
   async finalize(status: RunStatus | "interrupted", details: Record<string, unknown> = {}): Promise<EvidenceFinalization> {
     const loadedObjectives = await this.loadObjectiveEvents();
+    let failureKind = details.failureKind as FailureKind | undefined;
+    const reconciledObjectives = reconcileObjectiveEvents(loadedObjectives.events, {
+      runFailureKind: failureKind,
+      runnerTerminated: details.runnerTerminated === true || details.timedOut === true || typeof details.signal === "string",
+    });
     const objectiveSummary = this.contract
-      ? summarizeObjectiveEvents(this.contract, loadedObjectives.events)
+      ? summarizeObjectiveEvents(this.contract, reconciledObjectives.events)
       : undefined;
     const requiredFailed = objectiveSummary?.objectives.some((item) => item.required && item.state === "failed") ?? false;
     const requiredIncomplete = objectiveSummary?.objectives.some((item) => item.required && (item.state === "blocked" || item.state === "not_executed")) ?? false;
 
     let finalStatus = status;
-    let failureKind = details.failureKind as FailureKind | undefined;
     if (status === "passed" && requiredFailed) finalStatus = "failed";
     if (status === "passed" && !requiredFailed && requiredIncomplete) finalStatus = "blocked";
     if (status === "passed" && objectiveSummary && !objectiveSummary.allRequiredPassed) {
@@ -110,7 +116,9 @@ export class EvidenceSession {
         : file.status === "not-produced" ? [`${name} was not produced: ${file.reason}`]
           : []);
     if (loadedObjectives.warning) evidenceWarnings.push(loadedObjectives.warning);
+    evidenceWarnings.push(...reconciledObjectives.warnings);
     const runtimeInstances = [...this.runtimeInstances.values()];
+    const diagnosticSummary = details.diagnosticSummary as RunnerFailureSummary | undefined;
     const result = {
       schemaVersion: 1,
       runId: this.runId,
@@ -142,7 +150,7 @@ export class EvidenceSession {
       files: this.files,
     });
 
-    return { status: finalStatus, failureKind, objectiveSummary, evidenceWarnings, runtimeInstances };
+    return { status: finalStatus, failureKind, objectiveSummary, evidenceWarnings, runtimeInstances, diagnosticSummary };
   }
 
   private async writeManifest(value: unknown): Promise<void> {

@@ -57,6 +57,52 @@ export interface ObjectiveSummary {
   allRequiredPassed: boolean;
 }
 
+const runLevelFailureKinds = new Set<FailureKind>(["environment", "build", "launch", "timeout", "adapter", "crash"]);
+
+function hasBusinessAssertionEvidence(event: ObjectiveEvent): boolean {
+  if (event.evidence?.some((reference) => /#.+$|::|@[A-Za-z0-9_-]+$/.test(reference))) return true;
+  return /business|assert|functional|test[-_ ]?step|spec/i.test(event.phase ?? "");
+}
+
+export function reconcileObjectiveEvents(
+  events: ObjectiveEvent[],
+  context: { runFailureKind?: FailureKind; runnerTerminated?: boolean },
+): { events: ObjectiveEvent[]; warnings: string[] } {
+  const runFailureKind = context.runFailureKind;
+  if (!runFailureKind || (!context.runnerTerminated && !runLevelFailureKinds.has(runFailureKind))) {
+    return { events, warnings: [] };
+  }
+
+  const latestTerminal = new Map<string, ObjectiveEvent>();
+  for (const event of events) {
+    if (event.state !== "started") latestTerminal.set(event.objectiveId, event);
+  }
+  const candidates = [...latestTerminal.values()]
+    .filter((event) => event.state === "failed" && event.failureKind === "assertion" && !hasBusinessAssertionEvidence(event))
+    .sort((left, right) => left.at.localeCompare(right.at));
+  const root = candidates[0];
+  if (!root) return { events, warnings: [] };
+
+  const replacements = new Map<string, ObjectiveEvent>();
+  replacements.set(root.objectiveId, { ...root, failureKind: runFailureKind });
+  for (const event of candidates.slice(1)) {
+    replacements.set(event.objectiveId, {
+      ...event,
+      state: "blocked",
+      failureKind: undefined,
+      blockedBy: root.objectiveId,
+      message: `blocked after ${root.objectiveId} failed due to ${runFailureKind}`,
+    });
+  }
+
+  return {
+    events: events.map((event) => latestTerminal.get(event.objectiveId) === event
+      ? replacements.get(event.objectiveId) ?? event
+      : event),
+    warnings: [`objective failure classifications were corrected from unproven assertions using run-level ${runFailureKind}`],
+  };
+}
+
 export function summarizeObjectiveEvents(contract: TestContract, events: ObjectiveEvent[]): ObjectiveSummary {
   const terminal = new Map<string, ObjectiveEvent>();
   for (const event of events) {

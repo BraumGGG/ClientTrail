@@ -93,4 +93,35 @@ describe("evidence session", () => {
     expect(finalized.status).toBe("passed");
     expect(finalized.objectiveSummary?.allRequiredPassed).toBe(true);
   });
+
+  it("reconciles unproven objective assertions after a runner timeout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "evidence-timeout-objectives-"));
+    const context = await createProjectContext(root);
+    const contract = validateTestContract({
+      contractVersion: 1,
+      objectives: [
+        { id: "launch", description: "launch", required: true },
+        { id: "share", description: "share", required: true },
+      ],
+      preconditions: [],
+      requiredCapabilities: [],
+      optionalDegradations: [],
+      passCriteria: [],
+      failCriteria: [],
+      blockedCriteria: [],
+    });
+    const session = await EvidenceSession.create(context, contract);
+    await writeFile(join(session.directory, "objective-events.json"), JSON.stringify([
+      { runId: session.runId, objectiveId: "launch", state: "failed", failureKind: "assertion", message: "业务断言失败", at: "2026-09-21T00:00:01.000Z" },
+      { runId: session.runId, objectiveId: "share", state: "failed", failureKind: "assertion", message: "业务断言失败", at: "2026-09-21T00:00:02.000Z" },
+    ]), "utf8");
+
+    const finalized = await session.finalize("failed", { failureKind: "timeout", timedOut: true, signal: "SIGTERM" });
+
+    expect(finalized.objectiveSummary?.objectives).toEqual([
+      expect.objectContaining({ id: "launch", state: "failed", failureKind: "timeout" }),
+      expect.objectContaining({ id: "share", state: "blocked", blockedBy: "launch" }),
+    ]);
+    expect(finalized.evidenceWarnings).toContain("objective failure classifications were corrected from unproven assertions using run-level timeout");
+  });
 });

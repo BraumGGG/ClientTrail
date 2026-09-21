@@ -1,5 +1,13 @@
 # 更新日志
 
+## 未发布 - 2026-09-21
+
+- 默认采用选择性回归：直接目标、共享边界补测，以及固定条件触发的单次完整回归升级。
+- 明确每个测试请求最多升级一次完整回归；基础设施失败和完整回归失败后不自动重跑。
+- runner timeout、launch/environment/adapter 失败时，校正缺少可定位业务证据的 objective assertion，并保留明确业务断言。
+- Tauri 结果增加首个致命信号、受影响实例、脚本超时、连接拒绝、channel closed 和终止 signal 摘要。
+- 多实例证据缺少应用实例 provenance 时，要求明确报告 PID、端口和 session 未验证。
+
 ## 未发布 - 2026-09-14
 
 - 项目许可证由 MIT 切换为 Apache License 2.0。

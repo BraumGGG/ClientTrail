@@ -94,6 +94,7 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 - finalized 结果中的 `cleanupWarning`、stderr warning 和其他非致命告警必须在最终回答中单独列出；它们默认不改变业务 `passed/failed`，但不得被省略或写成“完全无告警”。
 - 多实例证据同时提供预期事实和实际 provenance 时，至少比对 instanceId、PID、端口、二进制路径和数据目录；不一致时标记为 `evidence_warning`，保留业务结论并明确“预期值/实际值”，不得静默选择一方。
 - 异步轮询和重试必须有明确上限与证据，不能用固定 sleep、无限重试或最后一次响应猜测完成。
+- runner 被超时终止，或在 launch/environment/adapter 阶段失效时，缺少业务阶段和可定位业务证据引用的 `assertion` 不可信：最早的一个校正为运行级根因，后续同类失败标记为 `blocked`。只有 `stdout.log`、`stderr.log`、无锚点 timeline 等通用文件名不算业务断言证据；带有明确业务阶段或可定位业务证据的 assertion 保持原结论。
 
 故障注入、Provider record/replay、完整 provenance、动态预算和复杂隔离预检不是默认流程。仅当用户明确要求且 adapter 声明支持时，读取 [references/advanced-capabilities.md](references/advanced-capabilities.md)；不支持时报告 `capability_not_supported` 或 `not_configured`，不得临时扩展普通回归流程。
 
@@ -137,17 +138,32 @@ intake -> doctor -> isolated-worktree -> setup-plan -> confirmation -> setup
 
 用户明确要求高级能力时，再读取 [references/advanced-capabilities.md](references/advanced-capabilities.md)。
 
+### 测试范围选择（默认）
+
+项目逐步开发时默认执行选择性回归，不要求每次从头跑完全部目标：
+
+1. **直接目标**：执行用户本次要求、变更文件可明确映射或失败修复直接对应的 objective/suite。
+2. **共享边界补测**：若变更触及认证、会话、初始化、公共 IPC/API、持久化、公共 UI、测试 adapter 或多实例启动等共享边界，补充项目契约或既有测试说明中声明的受影响目标；不得由 Skill 发明项目专用依赖关系。
+3. **完整回归**：只执行冻结契约中全部可运行的 required objective，以及项目已有测试入口声明的整套目标。`not_configured`、`capability_not_supported` 和环境阻塞项单独报告，不伪造执行。
+
+以下任一条件成立时才标记 `uncertain`：变更无法映射到目标；共享模块已变更但项目没有影响声明；选择结果为空但确有相关代码变更；契约或测试入口不完整；认证、会话、初始化、公共协议、持久化 schema、adapter 或多实例隔离规则发生变化；当前版本缺少可关联的近期证据。
+
+`uncertain` 只允许把**尚未执行的本次计划**升级一次完整回归。每个用户测试请求最多发生一次 `incremental -> full`，并记录具体触发原因；进入 full 后不得再次升级。测试已经因 timeout、launch、environment 或 adapter 失败时，不自动重跑完整回归，只报告根因、未执行目标和“环境修复后的下一次计划应为 full”。完整回归失败后同样停止，不因“不确定”循环运行。
+
+历史通过证据可用于决定哪些目标本次不执行，但不能替代当前运行结论。被跳过的历史通过目标应写成“本次未执行（上次通过：<runId/时间>）”，不得计入本次 passed。
+
 ### Agent 自动编排
 
 1. 从用户消息、当前工作目录和已打开文件中解析被测项目根目录；如果只有一个合理候选，直接使用；有多个候选时要求用户选择。
 2. 自动定位 ClientTrail CLI：优先使用当前仓库的 `pnpm client-test`；否则查找包含 `packages/cli/src/main.ts` 的 ClientTrail checkout，并执行 `pnpm --dir <clienttrail-root> client-test`。禁止假设系统存在全局 `client-test` 可执行文件；找不到 checkout 时报告安装位置，不伪造结果。
 3. 识别单仓库和多目录项目：先找到包含 `package.json`、`Cargo.toml`、`tauri.conf.json` 或 `pyproject.toml` 的实际子项目根目录。若 worktree 根是 Python/工作流仓库而 `desktop/` 是 Tauri 子项目，Tauri doctor/run 必须使用 `desktop/`，后端测试可继续使用 worktree 根。
 4. 自动执行 `doctor --json`，结合用户声明和项目实际文件选择适配器。
-5. 只读取与用户目标相关的 adapter capability；并发或多实例测试先验证端口和可写目录隔离。
-6. 若项目已有测试接线，直接执行确定性回归；探索或录制只在用户明确要求时启动 MCP。
-7. 若项目没有测试接线，报告“正式项目只读模式无法执行该套件”，然后必须触发“setup 决策门”，明确等待用户选择 1 或 2；不要直接结束且不要在正式项目执行 setup。
-8. 用户选择完整接入后，创建隔离副本或临时 worktree，在隔离目录执行 dry-run → 单独确认 → setup → run。
-9. 只读取隔离目录的 evidence，测试结论必须标注运行目录和“正式项目未修改”。
+5. 读取冻结契约、已有测试入口、变更范围和近期 evidence，按“直接目标 -> 共享边界补测 -> 不确定性门”生成本次选择结果，并记录 selected objectives、未选择目标和原因。
+6. 只读取与已选目标相关的 adapter capability；并发或多实例测试先验证端口和可写目录隔离。
+7. 若项目已有测试接线，执行选择后的确定性回归；仅在运行前满足固定 `uncertain` 条件时升级一次 full。探索或录制只在用户明确要求时启动 MCP。
+8. 若项目没有测试接线，报告“正式项目只读模式无法执行该套件”，然后必须触发“setup 决策门”，明确等待用户选择 1 或 2；不要直接结束且不要在正式项目执行 setup。
+9. 用户选择完整接入后，创建隔离副本或临时 worktree，在隔离目录执行 dry-run → 单独确认 → setup → run。
+10. 只读取隔离目录的 evidence，测试结论必须标注运行目录和“正式项目未修改”。
 
 用户只要求“测试一下”时，默认执行 doctor。已有测试能力时直接 run → evidence；缺少测试接入时只报告阻塞，不执行 setup。不要把内部命令列表当作用户前置工作。
 
@@ -282,6 +298,8 @@ environment -> build -> launch -> locator -> timeout -> assertion
 - 外部依赖问题与客户端业务问题的分离结论；
 - 业务状态时间线和关键 API 摘要；
 - 清理阶段 warning 是否影响测试结论。
+- 首个致命信号、受影响实例、是否出现 script execution timeout、`ECONNREFUSED`、channel closed，以及外层 runner 是否被 signal 终止；没有对应证据时写“未观察到”，不要猜测。
+- 多实例运行只有 runner provenance、没有 appA/appB 实例事实时，明确写“实例级 provenance 未产生，双实例 PID/端口/session 未验证”。
 
 需要失败分类和证据映射时读取 [references/failure-diagnosis.md](references/failure-diagnosis.md)。
 
@@ -303,7 +321,7 @@ client-test diagnose --project <project-root> --result <run-dir>\\result.json --
 完成一次任务后按以下顺序返回：
 
 1. 项目和技术栈识别结果。
-2. 采用的测试策略和降级原因。
+2. 采用的测试策略、选择的 objective/suite、未选择目标及原因；若升级 full，写明唯一触发原因。
 3. 执行过的命令及退出码。
 4. 测试汇总：通过、失败、环境错误和未执行套件。
 5. `runId`、`artifactDirectory` 和关键证据文件。
@@ -318,6 +336,7 @@ client-test diagnose --project <project-root> --result <run-dir>\\result.json --
 业务结论：<passed/failed/blocked>，required objective <passed>/<total>，退出码=<code>
 运行告警：<cleanupWarning、stderr warning 或“无”>
 事实一致性：<无差异，或列出预期值 -> 实际值>
+诊断信号：<首个致命信号、受影响实例、ECONNREFUSED/channel closed/runner signal；无则写“未观察到”>
 ```
 
 不得把 AI 推断写成测试框架结果；不得编造通过率、截图、日志或业务状态。

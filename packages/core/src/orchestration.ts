@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readdir, stat, writeFile, copyFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import type { FailureKind, RunStatus, SuiteTier } from "./contracts.js";
+import type { FailureKind, RunnerFailureSummary, RunStatus, SuiteTier } from "./contracts.js";
 
 export interface InstanceControlHandle {
   instanceId: string;
@@ -50,6 +50,28 @@ export function classifyWdioFailure(input: { failureKind?: FailureKind; stdout?:
   const testExecutionStarted = /RUNNING in|Execution of .* workers started|Spec Files:/i.test(stdout);
   const businessAssertionFailed = /\b\d+ failing\b|AssertionError|expected .* to|actual .* expected/i.test(`${stdout}\n${stderr}`);
   return correctFailureKind({ ...input, phase: sessionEstablished || testExecutionStarted ? "wdio-test" : "onPrepare", sessionEstablished, testExecutionStarted, businessAssertionFailed, message: stderr });
+}
+
+export function summarizeRunnerFailureSignals(input: { stdout?: string; stderr?: string; timedOut?: boolean; signal?: string | null }): RunnerFailureSummary | undefined {
+  const text = `${input.stdout ?? ""}\n${input.stderr ?? ""}`;
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const firstFatalLine = lines.find((line) => /script execution timed out|econnrefused|channel closed|failed to (?:start|launch|create)|session .*not (?:created|established)/i.test(line));
+  const affectedInstances = [...new Set(lines.flatMap((line) => [
+    ...(line.match(/\bapp[A-Z0-9][A-Za-z0-9_-]*\b/g) ?? []),
+    ...(line.match(/\binstance[-_][A-Za-z0-9_-]+\b/gi) ?? []),
+  ]))];
+  const summary: RunnerFailureSummary = {
+    firstFatalLine,
+    affectedInstances,
+    scriptExecutionTimedOut: /script execution timed out/i.test(text),
+    connectionRefused: /econnrefused|connection refused/i.test(text),
+    channelClosed: /channel closed|webdriver channel .*closed/i.test(text),
+    runnerTimedOut: input.timedOut === true,
+    signal: input.signal ?? undefined,
+  };
+  return summary.firstFatalLine || summary.scriptExecutionTimedOut || summary.connectionRefused || summary.channelClosed || summary.runnerTimedOut || summary.signal
+    ? summary
+    : undefined;
 }
 
 export function classifyBusinessResponse(input: { status: number; expectedStatuses?: number[]; blocked?: boolean }): "expected_business_response" | "unexpected_business_response" | "business_blocked" {

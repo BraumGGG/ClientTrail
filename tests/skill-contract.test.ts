@@ -32,4 +32,19 @@ describe("skill contract", () => {
     expect(skill).toContain("业务结论：");
     expect(skill).toContain("事实一致性：");
   });
+
+  it("selects incremental tests and permits only one full regression escalation", () => {
+    expect(skill).toContain("直接目标");
+    expect(skill).toContain("共享边界补测");
+    expect(skill).toContain("每个用户测试请求最多发生一次 `incremental -> full`");
+    expect(skill).toContain("不自动重跑完整回归");
+    expect(skill).toContain("不得计入本次 passed");
+  });
+
+  it("reports corrected infrastructure failures and missing instance provenance", () => {
+    expect(skill).toContain("缺少业务阶段和可定位业务证据引用的 `assertion` 不可信");
+    expect(skill).toContain("通用文件名不算业务断言证据");
+    expect(skill).toContain("首个致命信号");
+    expect(skill).toContain("实例级 provenance 未产生，双实例 PID/端口/session 未验证");
+  });
 });

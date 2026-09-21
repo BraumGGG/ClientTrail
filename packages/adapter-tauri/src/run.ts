@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "@iarna/toml";
-import { EvidenceSession, runProcess, correctFailureKind, classifyWdioFailure } from "@client-test/core";
+import { EvidenceSession, runProcess, correctFailureKind, classifyWdioFailure, summarizeRunnerFailureSignals } from "@client-test/core";
 import type { FailureKind, ProjectContext, RunStatus, TestContract } from "@client-test/core";
 
 export async function runTauriSuite(context: ProjectContext, options: { suite?: string; timeoutMs?: number; contract?: TestContract } = {}) {
@@ -72,7 +72,8 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
   const failureKind: FailureKind | undefined = result.spawnError ? "environment" : result.timedOut ? "timeout" : result.exitCode === 0 ? undefined : "assertion";
   const correctedFailureKind = classifyWdioFailure({ failureKind, stdout: result.stdout, stderr: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut });
   const cleanupWarning = /Failed to clear mock store|sessionId is required|cleanup/i.test(result.stderr) ? "cleanup_warning" : undefined;
-  const finalized = await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctedFailureKind, cleanupWarning, command: { executable, args, cwd: context.projectRoot } });
+  const diagnosticSummary = summarizeRunnerFailureSignals({ stdout: result.stdout, stderr: result.stderr, timedOut: result.timedOut, signal: result.signal });
+  const finalized = await session.finalize(status, { exitCode: result.exitCode, signal: result.signal, pid: result.pid, timedOut: result.timedOut, runnerTerminated: result.timedOut || result.signal !== null, spawnError: result.spawnError, failureKind: correctedFailureKind, cleanupWarning, diagnosticSummary, command: { executable, args, cwd: context.projectRoot } });
   return {
     status: finalized.status === "interrupted" ? "error" as const : finalized.status,
     failureKind: finalized.failureKind ?? correctedFailureKind,
@@ -81,5 +82,6 @@ export async function runTauriSuite(context: ProjectContext, options: { suite?: 
     exitCode: result.exitCode,
     objectiveSummary: finalized.objectiveSummary,
     evidenceWarnings: finalized.evidenceWarnings,
+    diagnosticSummary: finalized.diagnosticSummary,
   };
 }
