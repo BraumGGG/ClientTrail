@@ -13,6 +13,7 @@ export const objectiveEventSchema = z.object({
     "environment", "build", "launch", "locator", "timeout",
     "assertion", "backend", "network", "crash", "security",
     "adapter", "evidence_incomplete", "unknown",
+    "capability_not_configured",
   ]).optional(),
   blockedBy: z.string().optional(),
   instanceId: z.string().optional(),
@@ -34,6 +35,10 @@ export type ObjectiveEventInput = Omit<ObjectiveEvent, "runId" | "at"> & { at?: 
 
 export interface RuntimeInstanceFacts {
   instanceId: string;
+  processRole?: "runner" | "application" | "webview";
+  runnerPid?: number;
+  appPid?: number;
+  webviewPid?: number;
   binaryPath?: string;
   pid?: number;
   webdriverOrCdpPort?: number;

@@ -15,18 +15,20 @@ export function detectPytest(context: ProjectContext): DetectionResult {
   return { adapterId: "pytest", detected: evidence.length > 0 || tests, confidence: evidence.length > 0 ? 1 : tests ? 0.6 : 0, evidence, capabilities: ["junit-xml", "fixtures", "hypothesis"] };
 }
 
-export async function runPytest(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
-  const session = await EvidenceSession.create(context, options.contract);
+export async function runPytest(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract; requestRunId?: string } = {}): Promise<RunResult> {
+  const session = await EvidenceSession.create(context, options.contract, { requestRunId: options.requestRunId });
   const executable = process.platform === "win32" ? "python.exe" : "python3";
   const result = await runProcess({ executable, args: ["-m", "pytest", "--junitxml", join(session.directory, "pytest.xml")], cwd: context.projectRoot, env: session.childEnvironment() }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
-  await session.recordRuntimeInstance({ instanceId: "adapter-runner", binaryPath: executable, pid: result.pid });
+  await session.recordRuntimeInstance({ instanceId: "adapter-runner", processRole: "runner", binaryPath: executable, pid: result.pid, runnerPid: result.pid });
   await session.write("pytest.stdout.log", result.stdout);
   await session.write("pytest.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  const finalized = await session.finalize(status, { exitCode: result.exitCode, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "pytest", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }), adapter: "pytest" });
+  const finalized = await session.finalize(status, { exitCode: result.exitCode, pid: result.pid, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "pytest", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }), adapter: "pytest", adapterVersion: "0.1.0" });
   return {
     status: finalized.status === "interrupted" ? "error" : finalized.status,
+    adapterId: "pytest",
+    requestRunId: options.requestRunId,
     failureKind: finalized.failureKind ?? failureKind,
     runId: session.runId,
     artifactDirectory: session.directory,

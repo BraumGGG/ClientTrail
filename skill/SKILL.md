@@ -84,6 +84,8 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 
 ## 回归结果质量规则
 
+- 一次 CLI 测试请求另外拥有一个 `requestRunId`，用于关联多个独立 suite；请求必须在 `.client-test/artifacts/<requestRunId>/aggregate-result.json` 形成原子化总结果。suite `runId` 仍然独立，不能用任一 suite 结果冒充请求总结果。
+
 - 每次运行只能有一个由 ClientTrail evidence session 创建的 `runId`。CLI 必须把它传给 adapter、测试框架和应用实例；项目测试不得另建无法关联的运行编号。
 - 最终结论必须经过最小 evidence closure：required objective 均有 `passed/failed/blocked/not_executed` 终态，`manifest.json` 和 `result.json` 已最终化，退出码与目标汇总一致。缺少任一项时标记 `evidence_incomplete`，不得给出无条件通过。
 - adapter 至少记录可获得的实际 runner 或实例事实，包括 executable、PID、端口、数据目录和 sessionId。字段无法取得时写明未产生原因；不得用配置中的期望值冒充实际值。
@@ -95,6 +97,11 @@ AI 必须先判断只读模式是否足够，再决定是否提出 setup：
 - 多实例证据同时提供预期事实和实际 provenance 时，至少比对 instanceId、PID、端口、二进制路径和数据目录；不一致时标记为 `evidence_warning`，保留业务结论并明确“预期值/实际值”，不得静默选择一方。
 - 异步轮询和重试必须有明确上限与证据，不能用固定 sleep、无限重试或最后一次响应猜测完成。
 - runner 被超时终止，或在 launch/environment/adapter 阶段失效时，缺少业务阶段和可定位业务证据引用的 `assertion` 不可信：最早的一个校正为运行级根因，后续同类失败标记为 `blocked`。只有 `stdout.log`、`stderr.log`、无锚点 timeline 等通用文件名不算业务断言证据；带有明确业务阶段或可定位业务证据的 assertion 保持原结论。
+- `not_configured` 表示能力或测试入口没有配置，不等同于环境崩溃；请求总结果应为 `blocked`，失败类型为 `capability_not_configured`，并保留 setup 决策门。
+- Tauri 构建预算与业务测试预算分离：`--build-timeout` 默认 300000 ms，`--timeout` 默认 120000 ms。构建超时后不得进入 WDIO；若日志已经包含 `Finished ... profile` 或 `Built application at`，记录 `buildCompletedNearTimeout`，仍不得把未执行业务测试判为通过。
+- Windows 超时必须请求终止完整子进程树；结果记录 `terminationMethod`，避免 npm/Tauri/Cargo 子进程脱离。
+- finalized evidence 写入 `producerVersion` 和 adapter 版本；Cargo adapter 直接输出测试统计。读取旧版 `{ runId, events: [{ status }] }` objective 文件时转换为规范 `state` 并写入兼容 warning。
+- 多实例诊断引用实例而 runtime provenance 缺少对应事实时，必须生成 `runtime instance facts missing for affected instance <id>` warning；不能默认为实例已验证。
 
 故障注入、Provider record/replay、完整 provenance、动态预算和复杂隔离预检不是默认流程。仅当用户明确要求且 adapter 声明支持时，读取 [references/advanced-capabilities.md](references/advanced-capabilities.md)；不支持时报告 `capability_not_supported` 或 `not_configured`，不得临时扩展普通回归流程。
 
@@ -242,6 +249,8 @@ AI 生成的测试必须先保存为草稿，再运行验证；不要把一次�
 client-test run --project <project-root> --json
 # 如已冻结契约：
 client-test run --project <project-root> --contract test-contract.json --json
+# Tauri 冷构建较慢时单独提高构建预算：
+client-test run --project <project-root> --build-timeout 300000 --timeout 120000 --json
 ```
 
 测试框架 hook 上报目标终态时，读取 `CLIENT_TEST_RUN_ID` 和 `CLIENT_TEST_ARTIFACT_DIR`，将同一 run 的结构化事件数组写入 `objective-events.json`；不得自行生成新的运行编号。

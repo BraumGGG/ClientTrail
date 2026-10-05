@@ -27,5 +27,8 @@ describe("backend adapters", () => {
     expect(evidence.runtimeInstances).toEqual([
       expect.objectContaining({ instanceId: "adapter-runner", pid: expect.any(Number) }),
     ]);
+    expect(evidence.testSummary).toEqual(expect.objectContaining({ passed: 1, failed: 0 }));
+    expect(evidence.producerVersion).toBe("0.1.0");
+    expect(evidence.adapterVersion).toBe("0.1.0");
   }, 30_000);
 });

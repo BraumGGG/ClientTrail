@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { CLIENT_TEST_VERSION } from "./contracts.js";
 import type { FailureKind, ProjectContext, RunnerFailureSummary, RunStatus, TestContract } from "./contracts.js";
 import type { StateTransition } from "./evidence-model.js";
 import {
@@ -37,15 +38,15 @@ export class EvidenceSession {
   private runtimeInstances = new Map<string, RuntimeInstanceFacts>();
   private files: Record<string, EvidenceFileStatus> = {};
 
-  private constructor(private readonly redact = true, directory: string, private readonly contract?: TestContract) {
+  private constructor(private readonly redact = true, directory: string, private readonly contract?: TestContract, private readonly requestRunId?: string) {
     this.runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
     this.directory = join(directory, this.runId);
   }
 
-  static async create(context: ProjectContext, contract?: TestContract): Promise<EvidenceSession> {
-    const session = new EvidenceSession(context.config.artifacts.redact, join(context.projectRoot, context.config.artifacts.directory), contract);
+  static async create(context: ProjectContext, contract?: TestContract, options: { requestRunId?: string } = {}): Promise<EvidenceSession> {
+    const session = new EvidenceSession(context.config.artifacts.redact, join(context.projectRoot, context.config.artifacts.directory), contract, options.requestRunId);
     await mkdir(session.directory, { recursive: true });
-    await session.writeManifest({ schemaVersion: 1, runId: session.runId, projectRoot: context.projectRoot, platform: context.platform, status: "running", contractHash: session.contract?.contractHash, files: {} });
+    await session.writeManifest({ schemaVersion: 1, producerVersion: CLIENT_TEST_VERSION, runId: session.runId, requestRunId: session.requestRunId, projectRoot: context.projectRoot, platform: context.platform, status: "running", contractHash: session.contract?.contractHash, files: {} });
     return session;
   }
 
@@ -53,6 +54,7 @@ export class EvidenceSession {
     return {
       CLIENT_TEST_RUN_ID: this.runId,
       CLIENT_TEST_ARTIFACT_DIR: this.directory,
+      ...(this.requestRunId ? { CLIENT_TEST_REQUEST_RUN_ID: this.requestRunId } : {}),
     };
   }
 
@@ -119,9 +121,16 @@ export class EvidenceSession {
     evidenceWarnings.push(...reconciledObjectives.warnings);
     const runtimeInstances = [...this.runtimeInstances.values()];
     const diagnosticSummary = details.diagnosticSummary as RunnerFailureSummary | undefined;
+    for (const instanceId of diagnosticSummary?.affectedInstances ?? []) {
+      if (!runtimeInstances.some((instance) => instance.instanceId === instanceId)) {
+        evidenceWarnings.push(`runtime instance facts missing for affected instance ${instanceId}`);
+      }
+    }
     const result = {
       schemaVersion: 1,
+      producerVersion: CLIENT_TEST_VERSION,
       runId: this.runId,
+      requestRunId: this.requestRunId,
       ...details,
       status: finalStatus,
       failureKind,
@@ -137,7 +146,11 @@ export class EvidenceSession {
     this.files["result.json"] = { status: "produced", bytes: Buffer.byteLength(resultOutput, "utf8") };
     await this.writeManifest({
       schemaVersion: 1,
+      producerVersion: CLIENT_TEST_VERSION,
       runId: this.runId,
+      requestRunId: this.requestRunId,
+      adapter: details.adapter,
+      adapterVersion: details.adapterVersion,
       status: finalStatus,
       finalized: true,
       contractHash: this.contract?.contractHash,
@@ -166,12 +179,32 @@ export class EvidenceSession {
       this.files[name] = { status: bytes === 0 ? "empty" : "produced", bytes };
       if (bytes === 0) return { events: [] };
       const parsed = JSON.parse(content) as unknown;
-      if (!Array.isArray(parsed)) throw new Error("expected a JSON array");
-      const events = parsed.map((event) => objectiveEventSchema.parse(event) as ObjectiveEvent);
+      let rawEvents: unknown[];
+      let legacyFormat = false;
+      if (Array.isArray(parsed)) {
+        rawEvents = parsed;
+      } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as { events?: unknown[] }).events)) {
+        const payload = parsed as { runId?: string; events: unknown[] };
+        legacyFormat = true;
+        rawEvents = payload.events.map((event) => {
+          if (!event || typeof event !== "object") return event;
+          const item = event as Record<string, unknown>;
+          return {
+            ...item,
+            runId: item.runId ?? payload.runId ?? this.runId,
+            state: item.state ?? item.status,
+          };
+        });
+      } else {
+        throw new Error("expected a JSON array or an object with events[]");
+      }
+      const events = rawEvents.map((event) => objectiveEventSchema.parse(event) as ObjectiveEvent);
       const matching = events.filter((event) => event.runId === this.runId);
-      const warning = matching.length === events.length
-        ? undefined
-        : `${name} contains events for a different runId`;
+      const warnings = [
+        ...(legacyFormat ? [`${name} used legacy status-wrapped format`] : []),
+        ...(matching.length === events.length ? [] : [`${name} contains events for a different runId`]),
+      ];
+      const warning = warnings.length > 0 ? warnings.join("; ") : undefined;
       return { events: matching, warning };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {

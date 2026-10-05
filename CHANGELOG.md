@@ -1,5 +1,26 @@
 # 更新日志
 
+## 2026-10-06
+
+### 新增
+
+- 为一次 CLI 测试请求生成 `requestRunId`，并在 `.client-test/artifacts/<requestRunId>/aggregate-result.json` 写入原子化总结果、suite 关联和选择范围。
+- 聚合结果区分 `passed`、`failed`、`error` 和 `blocked`；未配置测试能力使用 `capability_not_configured`，不再伪装成环境故障。
+- Tauri 增加独立 `--build-timeout`，默认 300 秒；业务测试 `--timeout` 默认仍为 120 秒。
+- 证据增加 producer/adapter 版本、Cargo 测试统计和旧版 objective event 兼容读取。
+
+### 修复
+
+- Windows 超时现在请求终止完整子进程树，减少 npm/Tauri/Cargo 父子进程脱离导致的假超时。
+- Tauri 构建在超时边界已经输出完成标记时记录 `buildCompletedNearTimeout`，但不会把未执行的业务测试改判为通过。
+- 诊断引用 appA/appB 等实例但没有实例事实时生成明确 evidence warning。
+
+### 验证
+
+- TypeScript 类型检查通过。
+- 完整测试：38 个测试文件、86 个测试通过。
+- 聚合、未配置能力、分阶段预算、进程树终止、旧 objective 事件和 provenance 告警均有回归测试。
+
 本文件记录 ClientTrail 每次实质更新的功能、行为、修复和验证结果。Skill 独立分发内容的变化同时记录在 [`skill/CHANGELOG.md`](skill/CHANGELOG.md)。
 
 ## 2026-09-21

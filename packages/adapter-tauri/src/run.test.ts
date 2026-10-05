@@ -3,9 +3,13 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectContext } from "@client-test/core";
-import { runTauriSuite } from "./run.js";
+import { resolveTauriTimeouts, runTauriSuite } from "./run.js";
 
 describe("Tauri runner", () => {
+  it("keeps build and business-test budgets independent", () => {
+    expect(resolveTauriTimeouts({})).toEqual({ buildTimeoutMs: 300_000, testTimeoutMs: 120_000 });
+    expect(resolveTauriTimeouts({ buildTimeoutMs: 600_000, timeoutMs: 45_000 })).toEqual({ buildTimeoutMs: 600_000, testTimeoutMs: 45_000 });
+  });
   it("exposes the runner entry point", () => {
     expect(runTauriSuite).toBeTypeOf("function");
   });
@@ -38,9 +42,13 @@ describe("Tauri runner", () => {
         blockedCriteria: [],
       },
     });
-    expect(result.status).toBe("error");
-    expect(result.failureKind).toBe("environment");
+    expect(result.status).toBe("blocked");
+    expect(result.failureKind).toBe("capability_not_configured");
+    expect(result.adapterId).toBe("tauri-2");
     const message = await readFile(join(result.artifactDirectory!, "setup-required.txt"), "utf8");
     expect(message).toContain("client-test feature");
+    const evidence = JSON.parse(await readFile(join(result.artifactDirectory!, "result.json"), "utf8"));
+    expect(evidence.capabilityStatus).toBe("not_configured");
+    expect(evidence.setupRequired).toBe(true);
   });
 });

@@ -18,6 +18,7 @@ export function diagnoseResult(result: RunResult, artifactDirectory?: string): D
     crash: ["stderr.log", "backend.log", "manifest.json"],
     security: ["manifest.json", "result.json"],
     adapter: ["manifest.json", "stderr.log", "result.json"],
+    capability_not_configured: ["manifest.json", "setup-required.txt", "result.json"],
     evidence_incomplete: ["manifest.json", "result.json", "state-timeline.json"],
     unknown: ["result.json", "manifest.json"],
   };
@@ -34,6 +35,7 @@ export function diagnoseResult(result: RunResult, artifactDirectory?: string): D
     crash: "检查进程退出码、stderr 和系统事件日志。",
     security: "移除生产构建中的测试端点、调试端口或测试插件。",
     adapter: "检查适配器、驱动、session 建立阶段和启动参数，不要归因于业务断言。",
+    capability_not_configured: "检查 doctor 能力状态；若需要接入测试，只在隔离副本中执行 setup dry-run 并等待确认。",
     evidence_incomplete: "补齐契约要求的证据闭包、状态时间线和可定位引用。",
     unknown: "读取完整 evidence 后再进行人工或 AI 分析。",
   };

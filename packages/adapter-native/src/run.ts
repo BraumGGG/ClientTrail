@@ -20,16 +20,18 @@ export async function runNativeOperation(context: ProjectContext, operation: Nat
   return { ...result, command };
 }
 
-export async function runNativeSuite(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract } = {}): Promise<RunResult> {
-  const session = await EvidenceSession.create(context, options.contract);
+export async function runNativeSuite(context: ProjectContext, options: { timeoutMs?: number; contract?: TestContract; requestRunId?: string } = {}): Promise<RunResult> {
+  const session = await EvidenceSession.create(context, options.contract, { requestRunId: options.requestRunId });
   const configured = context.config.adapters.native;
   const command = configured && typeof configured === "object" && "command" in configured ? configured.command : undefined;
   if (!command) {
     session.markNotProduced("native.stdout.log", "no native automation command configured");
     session.markNotProduced("native.stderr.log", "no native automation command configured");
-    const finalized = await session.finalize("error", { adapter: "native", failureKind: "environment", message: "No native automation command configured" });
+    const finalized = await session.finalize("blocked", { adapter: "native", adapterVersion: "0.1.0", failureKind: "capability_not_configured", capabilityStatus: "not_configured", setupRequired: true, message: "No native automation command configured" });
     return {
       status: finalized.status === "interrupted" ? "error" : finalized.status,
+      adapterId: "native",
+      requestRunId: options.requestRunId,
       failureKind: finalized.failureKind,
       runId: session.runId,
       artifactDirectory: session.directory,
@@ -39,14 +41,16 @@ export async function runNativeSuite(context: ProjectContext, options: { timeout
   }
   const commandSpec = parseCommand(command, context.projectRoot);
   const result = await runProcess({ ...commandSpec, env: session.childEnvironment() }, { timeoutMs: options.timeoutMs, redact: context.config.artifacts.redact });
-  await session.recordRuntimeInstance({ instanceId: "adapter-runner", binaryPath: commandSpec.executable, pid: result.pid });
+  await session.recordRuntimeInstance({ instanceId: "adapter-runner", processRole: "runner", binaryPath: commandSpec.executable, pid: result.pid, runnerPid: result.pid });
   await session.write("native.stdout.log", result.stdout);
   await session.write("native.stderr.log", result.stderr);
   const status = result.spawnError ? "error" : result.timedOut ? "failed" : result.exitCode === 0 ? "passed" : "failed";
   const failureKind = result.spawnError ? "environment" as const : result.timedOut ? "timeout" as const : result.exitCode === 0 ? undefined : "assertion" as const;
-  const finalized = await session.finalize(status, { adapter: "native", pid: result.pid, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "native", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }) });
+  const finalized = await session.finalize(status, { adapter: "native", adapterVersion: "0.1.0", pid: result.pid, exitCode: result.exitCode, timedOut: result.timedOut, spawnError: result.spawnError, failureKind: correctFailureKind({ failureKind, phase: "native", message: result.stderr, spawnError: result.spawnError, timedOut: result.timedOut }) });
   return {
     status: finalized.status === "interrupted" ? "error" : finalized.status,
+    adapterId: "native",
+    requestRunId: options.requestRunId,
     failureKind: finalized.failureKind ?? failureKind,
     runId: session.runId,
     artifactDirectory: session.directory,

@@ -1,5 +1,12 @@
 # 更新日志
 
+## 未发布 - 2026-10-06
+
+- 一次 `client-test run` 现在生成 `requestRunId` 和请求级 `aggregate-result.json`，明确列出 suite 结果、选择范围和整体状态。
+- 未配置 Tauri/WebDriver 能力使用 `blocked + capability_not_configured`，不再与真实环境故障混淆。
+- Tauri 构建与业务测试分离预算：`--build-timeout` 默认 300 秒，`--timeout` 默认 120 秒；Windows 超时请求终止完整进程树。
+- 结果增加 `producerVersion`/`adapterVersion`、Cargo 统计、旧版 objective event 兼容和缺失实例 provenance 告警。
+
 ## 未发布 - 2026-09-21
 
 - 默认采用选择性回归：直接目标、共享边界补测，以及固定条件触发的单次完整回归升级。

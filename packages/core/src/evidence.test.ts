@@ -124,4 +124,27 @@ describe("evidence session", () => {
     ]);
     expect(finalized.evidenceWarnings).toContain("objective failure classifications were corrected from unproven assertions using run-level timeout");
   });
+
+  it("normalizes legacy status-wrapped objective events and records missing instance facts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "evidence-legacy-events-"));
+    const context = await createProjectContext(root);
+    const contract = validateTestContract({
+      contractVersion: 1,
+      objectives: [{ id: "dual-launch", description: "launch", required: true }],
+      preconditions: [], requiredCapabilities: [], optionalDegradations: [], passCriteria: [], failCriteria: [], blockedCriteria: [],
+    });
+    const session = await EvidenceSession.create(context, contract);
+    await writeFile(join(session.directory, "objective-events.json"), JSON.stringify({
+      runId: session.runId,
+      events: [{ objectiveId: "dual-launch", status: "passed", at: "2026-10-06T00:00:00.000Z" }],
+    }), "utf8");
+    await session.finalize("passed", {
+      diagnosticSummary: { affectedInstances: ["appA", "appB"], scriptExecutionTimedOut: false, connectionRefused: false, channelClosed: false, runnerTimedOut: false },
+    });
+    const result = JSON.parse(await readFile(join(session.directory, "result.json"), "utf8"));
+    expect(result.objectiveSummary.allRequiredPassed).toBe(true);
+    expect(result.evidenceWarnings).toContain("objective-events.json used legacy status-wrapped format");
+    expect(result.evidenceWarnings).toContain("runtime instance facts missing for affected instance appA");
+    expect(result.evidenceWarnings).toContain("runtime instance facts missing for affected instance appB");
+  });
 });

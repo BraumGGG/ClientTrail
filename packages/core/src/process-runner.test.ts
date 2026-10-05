@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runProcess } from "./process-runner.js";
+import { runProcess, terminateProcessTree } from "./process-runner.js";
 
 describe("process runner", () => {
   it("runs argument arrays without a shell", async () => {
@@ -11,6 +11,12 @@ describe("process runner", () => {
   it("times out and terminates a child", async () => {
     const result = await runProcess({ executable: process.execPath, args: ["-e", "setTimeout(()=>{}, 10000)"], cwd: process.cwd() }, { timeoutMs: 20 });
     expect(result.timedOut).toBe(true);
+    expect(result.terminationMethod).toBe(process.platform === "win32" ? "taskkill" : expect.any(String));
+  });
+
+  it("uses the platform process-tree terminator", () => {
+    expect(terminateProcessTree(undefined, "win32")).toBe("child");
+    expect(terminateProcessTree(undefined, "linux")).toBe("child");
   });
 
   it.runIf(process.platform === "win32")("runs Windows command shims without a shell", async () => {

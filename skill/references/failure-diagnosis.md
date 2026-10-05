@@ -23,6 +23,10 @@ runner timeout / launch / environment / adapter
 
 不得根据这些信号自动重试。测试已经启动并因基础设施失败终止时，本轮停止；需要完整回归时，将其作为环境修复后的下一次测试计划。
 
+未配置测试入口或能力时使用 `blocked + capability_not_configured`，不要写成环境崩溃。一次 CLI 请求的最终判断以 `aggregate-result.json` 为准，不能只看某个 suite 的 `result.json`。
+
+Tauri 构建超时与业务测试超时分开诊断：构建阶段检查 `buildCompletedNearTimeout`、`Finished ... profile` 和 `Built application at`；即使二进制已经生成，只要 WDIO 没有闭环，本次也不能判为业务通过。
+
 ## 实例事实
 
 多实例测试需要区分 runner 进程和应用实例。只有 `adapter-runner` PID 时，不能推断 appA/appB 已成功启动。最终报告使用以下明确表述：

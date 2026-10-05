@@ -8,6 +8,8 @@ export const exitCodes = {
   internal: 4,
 } as const;
 
+export const CLIENT_TEST_VERSION = "0.1.0";
+
 export const commandSpecSchema = z.object({
   executable: z.string().min(1),
   args: z.array(z.string()),
@@ -28,7 +30,7 @@ export type CommandSpec = z.infer<typeof commandSpecSchema>;
 export type SetupPlan = z.infer<typeof setupPlanSchema>;
 export type FailureKind =
   | "environment" | "build" | "launch" | "locator" | "timeout"
-  | "assertion" | "backend" | "network" | "crash" | "security" | "adapter" | "evidence_incomplete" | "unknown";
+  | "assertion" | "backend" | "network" | "crash" | "security" | "adapter" | "capability_not_configured" | "evidence_incomplete" | "unknown";
 export type RunStatus = "pending" | "running" | "paused" | "waiting_human" | "recovering" | "passed" | "failed" | "timeout" | "cancelled" | "blocked" | "error";
 export interface RunnerFailureSummary {
   firstFatalLine?: string;
@@ -41,6 +43,8 @@ export interface RunnerFailureSummary {
 }
 export interface RunResult {
   status: RunStatus;
+  adapterId?: string;
+  requestRunId?: string;
   failureKind?: FailureKind;
   runId?: string;
   artifactDirectory?: string;
@@ -48,6 +52,17 @@ export interface RunResult {
   objectiveSummary?: ObjectiveSummary;
   evidenceWarnings?: string[];
   diagnosticSummary?: RunnerFailureSummary;
+  testSummary?: TestExecutionSummary;
+}
+
+export interface TestExecutionSummary {
+  passed?: number;
+  failed?: number;
+  ignored?: number;
+  measured?: number;
+  filteredOut?: number;
+  warningCount?: number;
+  errorCount?: number;
 }
 
 export interface ProjectContext {
@@ -92,7 +107,7 @@ export interface TestAdapter {
   doctor(context: ProjectContext): Promise<DoctorReport>;
   planSetup(context: ProjectContext): Promise<SetupPlan>;
   applySetup(context: ProjectContext, plan: SetupPlan): Promise<{ changedFiles: string[] }>;
-  run(context: ProjectContext, options?: { suite?: string; timeoutMs?: number; contract?: TestContract }): Promise<RunResult>;
+  run(context: ProjectContext, options?: { suite?: string; timeoutMs?: number; buildTimeoutMs?: number; contract?: TestContract; requestRunId?: string }): Promise<RunResult>;
   capabilities?(context: ProjectContext): Promise<AdapterCapabilities>;
 }
 
